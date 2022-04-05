@@ -1,4 +1,5 @@
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
 enum TableMetadataFormatVersion {
@@ -12,6 +13,8 @@ enum TableMetadataFormatVersion {
 #[serde(rename_all = "kebab-case", remote = "Self")]
 struct TableMetadataV2 {
     format_version: TableMetadataFormatVersion,
+
+    table_uuid: Uuid,
 }
 
 impl<'de> Deserialize<'de> for TableMetadataV2 {
@@ -39,7 +42,8 @@ mod tests {
     fn test_deserialize_table_data_v2() -> Result<()> {
         let data = r#"
             {
-                "format-version" : "2"
+                "format-version" : "2",
+                "table-uuid": "550e8400-e29b-41d4-a716-446655440000"
             }
         "#;
         let metadata = serde_json::from_str::<TableMetadataV2>(&data)?;
@@ -49,14 +53,26 @@ mod tests {
         ));
         Ok(())
     }
+
     #[test]
-    fn test_deserialize_table_data_v2_invalid() -> Result<()> {
+    fn test_invalid_table_uuid() -> Result<()> {
+        let data = r#"
+            {
+                "format-version" : "2",
+                "table-uuid": "xxxx"
+            }
+        "#;
+        assert!(serde_json::from_str::<TableMetadataV2>(&data).is_err());
+        Ok(())
+    }
+    #[test]
+    fn test_deserialize_table_data_v2_invalid_format_version() -> Result<()> {
         let data = r#"
             {
                 "format-version" : "1"
             }
         "#;
-        matches!(serde_json::from_str::<TableMetadataV2>(&data), Err(_));
+        assert!(serde_json::from_str::<TableMetadataV2>(&data).is_err());
         Ok(())
     }
 }
