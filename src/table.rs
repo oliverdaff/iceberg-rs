@@ -12,10 +12,14 @@ enum TableMetadataFormatVersion {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", remote = "Self")]
 struct TableMetadataV2 {
-    //
+    /// Integer Version for the format.
     format_version: TableMetadataFormatVersion,
-
+    /// A UUID that identifies the table
     table_uuid: Uuid,
+    /// Location tables base location
+    location: String, 
+    /// The tables highest sequence number
+    last_sequence_number: i64
 }
 
 impl<'de> Deserialize<'de> for TableMetadataV2 {
@@ -44,7 +48,9 @@ mod tests {
         let data = r#"
             {
                 "format-version" : 2,
-                "table-uuid": "550e8400-e29b-41d4-a716-446655440000"
+                "table-uuid": "fb072c92-a02b-11e9-ae9c-1bb7bc9eca94",
+                "location": "s3://b/wh/data.db/table",
+                "last-sequence-number" : 1 
             }
         "#;
         let metadata = serde_json::from_str::<TableMetadataV2>(&data)?;
