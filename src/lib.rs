@@ -1,3 +1,4 @@
+mod schema;
 mod table;
 
 #[cfg(test)]

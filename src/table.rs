@@ -17,12 +17,13 @@ struct TableMetadataV2 {
     /// A UUID that identifies the table
     table_uuid: Uuid,
     /// Location tables base location
-    location: String, 
+    location: String,
     /// The tables highest sequence number
     last_sequence_number: i64,
     /// Timestamp in milliseconds from the unix epoch when the table was last updated.
     last_updated_ms: i64,
-
+    /// An integer; the highest assigned column ID for the table.
+    last_column_id: i32,
 }
 
 impl<'de> Deserialize<'de> for TableMetadataV2 {
@@ -55,6 +56,7 @@ mod tests {
                 "location": "s3://b/wh/data.db/table",
                 "last-sequence-number" : 1,
                 "last-updated-ms": 1515100955770
+                "last-column-id": 1
             }
         "#;
         let metadata = serde_json::from_str::<TableMetadataV2>(&data)?;
