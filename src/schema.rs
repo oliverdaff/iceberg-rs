@@ -7,7 +7,7 @@ use serde::{
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-#[serde(remote = "PrimitiveType")]
+#[serde(remote = "Self")]
 /// Primiative Types within a schemam.
 pub enum PrimitiveType {
     /// True or False
@@ -134,27 +134,27 @@ where
     Ok(PrimitiveType::Fixed(length))
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 /// Type for struct
 #[serde(rename_all = "lowercase")]
 enum StructNestedType {
     Struct,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 /// Type for List
 enum ListNestedType {
     List,
 }
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 /// Type for Map
 enum MapNestedType {
     Map,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 /// A struct is a tuple of typed values. Each field in the tuple is
 /// named and has an integer id that is unique in the table schema.
 /// Each field can be either optional or required, meaning that values can (or cannot) be null.
@@ -163,9 +163,12 @@ enum MapNestedType {
 struct Struct {
     #[serde(alias = "type")]
     struct_type: StructNestedType,
+
+    //
+    fields: Vec<StructField>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StructField {
     /// Unique Id
     id: i32,
@@ -179,6 +182,22 @@ pub struct StructField {
     doc: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct Schema {
+    /// Identifier of the schema
+    schema_id: i32,
+    /// Set of primitive fields that identify rows in a table.
+    identifier_field_ids: Option<Vec<i32>>,
+
+    /// Always the string "struct".
+    #[serde(alias = "type")]
+    struct_type: StructNestedType,
+
+    /// List of fields.
+    fields: Vec<StructField>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -186,7 +205,8 @@ mod tests {
     fn test_struct_type() {
         let data = r#"
         {
-            "type" : "struct"            
+            "type" : "struct",
+            "fields": []
         }
         "#;
         assert!(serde_json::from_str::<Struct>(&data).is_ok());
@@ -301,5 +321,27 @@ mod tests {
             let unserde: StructField = serde_json::from_str(&j).unwrap();
             assert_eq!(unserde.field_type, primitive);
         }
+    }
+
+    #[test]
+    fn test_schema() {
+        let data = r#"
+        {
+            "schema-id" : 1,
+            "type": "struct",
+            "fields" : [
+                {   
+                    "id" : 1,
+                    "name": "struct_name",
+                    "required": true,
+                    "field_type": "fixed[1]"
+                }
+            ]
+        }
+        "#;
+        let result_struct = serde_json::from_str::<Schema>(data).unwrap();
+        assert_eq!(1, result_struct.schema_id);
+        assert_eq!(None, result_struct.identifier_field_ids);
+        assert_eq!(1, result_struct.fields.len());
     }
 }
