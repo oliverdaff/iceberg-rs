@@ -3,7 +3,7 @@ use regex::Regex;
 use serde::{de, Deserialize, Deserializer, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged, rename_all="lowercase")]    
+#[serde(untagged, rename_all = "lowercase")]
 /// Primiative Types within a schemam.
 enum PrimativeType {
     /// True or False
@@ -32,8 +32,7 @@ enum PrimativeType {
     /// Universally Unique Identifiers
     Uuid,
     /// Fixed length byte array
-    /// TODO: Create this in spark and see what it looks like in the schema
-    Fixed(usize),
+    Fixed(FixedType),
     /// Arbitray-lenght byte array.
     Binary,
 }
@@ -57,33 +56,69 @@ impl<'de> Deserialize<'de> for DecimalType {
         let err_msg = format!("Invalid decimal format {}", this);
 
         let caps = RE.captures(&this).ok_or(de::Error::custom(&err_msg))?;
-        let precision  :i32 = caps
+        let precision: i32 = caps
             .name("p")
             .ok_or(de::Error::custom(&err_msg))
-            .and_then(|p| p.as_str().parse().map_err(|_| de::Error::custom("precision not i32")))?;
-        let scale  : u8 = caps
+            .and_then(|p| {
+                p.as_str()
+                    .parse()
+                    .map_err(|_| de::Error::custom("precision not i32"))
+            })?;
+        let scale: u8 = caps
             .name("s")
             .ok_or(de::Error::custom(&err_msg))
-            .and_then(|p| p.as_str().parse().map_err(|_| de::Error::custom("scale not u8")))?;
-        Ok(DecimalType{precision: precision, scale: scale})
+            .and_then(|p| {
+                p.as_str()
+                    .parse()
+                    .map_err(|_| de::Error::custom("scale not u8"))
+            })?;
+        Ok(DecimalType { precision, scale })
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct FixedType(u64);
+
+impl<'de> Deserialize<'de> for FixedType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let this = String::deserialize(deserializer)?;
+        lazy_static! {
+            static ref RE: Regex = Regex::new(r#"^fixed\[(?P<l>\d+)\]$"#).unwrap();
+        }
+
+        let err_msg = format!("Invalid fixed format {}", this);
+
+        let caps = RE.captures(&this).ok_or(de::Error::custom(&err_msg))?;
+        let length: u64 = caps
+            .name("l")
+            .ok_or(de::Error::custom(&err_msg))
+            .and_then(|p| {
+                p.as_str()
+                    .parse()
+                    .map_err(|_| de::Error::custom("length not u64"))
+            })?;
+        Ok(FixedType(length))
     }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 /// Type for struct
-#[serde(rename_all="lowercase")]
+#[serde(rename_all = "lowercase")]
 enum StructNestedType {
     Struct,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all="lowercase")]
+#[serde(rename_all = "lowercase")]
 /// Type for List
 enum ListNestedType {
     List,
 }
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all="lowercase")]
+#[serde(rename_all = "lowercase")]
 /// Type for Map
 enum MapNestedType {
     Map,
@@ -99,7 +134,6 @@ struct Struct {
     #[serde(alias = "type")]
     struct_type: StructNestedType,
 }
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StructField {
@@ -145,6 +179,49 @@ mod tests {
         }
         "#;
         let result_struct = serde_json::from_str::<StructField>(data).unwrap();
-        assert!(matches!(result_struct.field_type, PrimativeType::Decimal(DecimalType{precision: 1, scale: 1})))
-   }
+        assert!(matches!(
+            result_struct.field_type,
+            PrimativeType::Decimal(DecimalType {
+                precision: 1,
+                scale: 1
+            })
+        ));
+
+        let invalid_decimal_data = r#"
+        {
+            "id" : 1,
+            "name": "struct_name",
+            "required": true,
+            "field_type": "decimal(1,1000)"
+        }
+        "#;
+        assert!(serde_json::from_str::<StructField>(invalid_decimal_data).is_err());
+    }
+
+    #[test]
+    fn test_fixed() {
+        let data = r#"
+        {
+            "id" : 1,
+            "name": "struct_name",
+            "required": true,
+            "field_type": "fixed[1]"
+        }
+        "#;
+        let result_struct = serde_json::from_str::<StructField>(data).unwrap();
+        assert!(matches!(
+            result_struct.field_type,
+            PrimativeType::Fixed(FixedType(1))
+        ));
+
+        let invalid_fixed_data = r#"
+        {
+            "id" : 1,
+            "name": "struct_name",
+            "required": true,
+            "field_type": "fixed[0.1]"
+        }
+        "#;
+        assert!(serde_json::from_str::<StructField>(invalid_fixed_data).is_err());
+    }
 }
