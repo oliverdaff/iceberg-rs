@@ -7,9 +7,9 @@ use serde::{
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-#[serde(remote = "PrimativeType")]
+#[serde(remote = "PrimitiveType")]
 /// Primiative Types within a schemam.
-enum PrimativeType {
+enum PrimitiveType {
     /// True or False
     Boolean,
     /// 32-bit signed integer
@@ -41,24 +41,24 @@ enum PrimativeType {
     Binary,
 }
 
-impl Serialize for PrimativeType {
+impl Serialize for PrimitiveType {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        use PrimativeType::*;
+        use PrimitiveType::*;
         match self {
            Decimal {
                 precision: p,
                 scale: s,
             } => serializer.serialize_str(&format!("decimal({p},{s})")),
             Fixed(l) => serializer.serialize_str(&format!("fixed[{l}]")),
-            _ => PrimativeType::serialize(&self, serializer)
+            _ => PrimitiveType::serialize(&self, serializer)
 }
     }
 }
 
-impl<'de> Deserialize<'de> for PrimativeType {
+impl<'de> Deserialize<'de> for PrimitiveType {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -69,12 +69,12 @@ impl<'de> Deserialize<'de> for PrimativeType {
         } else if s.starts_with("fixed") {
             deserialize_fixed(s.into_deserializer())
         } else {
-            PrimativeType::deserialize(s.into_deserializer())
+            PrimitiveType::deserialize(s.into_deserializer())
         }
     }
 }
 
-fn deserialize_decimal<'de, D>(deserializer: D) -> Result<PrimativeType, D::Error>
+fn deserialize_decimal<'de, D>(deserializer: D) -> Result<PrimitiveType, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -102,10 +102,10 @@ where
                 .parse()
                 .map_err(|_| de::Error::custom("scale not u8"))
         })?;
-    Ok(PrimativeType::Decimal { precision, scale })
+    Ok(PrimitiveType::Decimal { precision, scale })
 }
 
-fn deserialize_fixed<'de, D>(deserializer: D) -> Result<PrimativeType, D::Error>
+fn deserialize_fixed<'de, D>(deserializer: D) -> Result<PrimitiveType, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -125,7 +125,7 @@ where
                 .parse()
                 .map_err(|_| de::Error::custom("length not u64"))
         })?;
-    Ok(PrimativeType::Fixed(length))
+    Ok(PrimitiveType::Fixed(length))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -168,7 +168,7 @@ pub struct StructField {
     /// Optional or required, meaning that values can (or can not be null)
     required: bool,
     // Field can have any type
-    field_type: PrimativeType,
+    field_type: PrimitiveType,
     /// Fields can have any optional comment or doc string.
     doc: Option<String>,
 }
@@ -205,7 +205,7 @@ mod tests {
         let result_struct = serde_json::from_str::<StructField>(data).unwrap();
         assert!(matches!(
             result_struct.field_type,
-            PrimativeType::Decimal {
+            PrimitiveType::Decimal {
                 precision: 1,
                 scale: 1
             }
@@ -233,7 +233,7 @@ mod tests {
         }
         "#;
         let result_struct = serde_json::from_str::<StructField>(data).unwrap();
-        assert!(matches!(result_struct.field_type, PrimativeType::Boolean));
+        assert!(matches!(result_struct.field_type, PrimitiveType::Boolean));
     }
 
     #[test]
@@ -247,7 +247,7 @@ mod tests {
         }
         "#;
         let result_struct = serde_json::from_str::<StructField>(data).unwrap();
-        assert!(matches!(result_struct.field_type, PrimativeType::Fixed(1),));
+        assert!(matches!(result_struct.field_type, PrimitiveType::Fixed(1),));
 
         let invalid_fixed_data = r#"
         {
@@ -263,34 +263,34 @@ mod tests {
     #[test]
     fn test_all_valid_types() {
         let type_mappings = vec![
-            PrimativeType::Boolean,
-            PrimativeType::Int,
-            PrimativeType::Long,
-            PrimativeType::Float,
-            PrimativeType::Double,
-            PrimativeType::Decimal{precision: 1, scale: 2},
-            PrimativeType::Date,
-            PrimativeType::Time,
-            PrimativeType::Timestamp,
-            PrimativeType::Timestampz,
-            PrimativeType::String,
-            PrimativeType::Uuid,
-            PrimativeType::Fixed(1),
-            PrimativeType::Binary,
+            PrimitiveType::Boolean,
+            PrimitiveType::Int,
+            PrimitiveType::Long,
+            PrimitiveType::Float,
+            PrimitiveType::Double,
+            PrimitiveType::Decimal{precision: 1, scale: 2},
+            PrimitiveType::Date,
+            PrimitiveType::Time,
+            PrimitiveType::Timestamp,
+            PrimitiveType::Timestampz,
+            PrimitiveType::String,
+            PrimitiveType::Uuid,
+            PrimitiveType::Fixed(1),
+            PrimitiveType::Binary,
         ];
 
-        for primative in type_mappings {
+        for primitive in type_mappings {
             let sf = StructField {
                 id: 1,
                 name: "name".to_string(),
                 required: true,
-                field_type: primative.clone(),
+                field_type: primitive.clone(),
                 doc: None,
             };
 
             let j = serde_json::to_string(&sf).unwrap();
             let unserde: StructField = serde_json::from_str(&j).unwrap();
-            assert_eq!(unserde.field_type, primative);
+            assert_eq!(unserde.field_type, primitive);
         }
     }
 }
