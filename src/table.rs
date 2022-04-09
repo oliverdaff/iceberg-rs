@@ -55,7 +55,7 @@ mod tests {
                 "table-uuid": "fb072c92-a02b-11e9-ae9c-1bb7bc9eca94",
                 "location": "s3://b/wh/data.db/table",
                 "last-sequence-number" : 1,
-                "last-updated-ms": 1515100955770
+                "last-updated-ms": 1515100955770,
                 "last-column-id": 1
             }
         "#;
