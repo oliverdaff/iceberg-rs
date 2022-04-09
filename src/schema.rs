@@ -55,7 +55,7 @@ impl Serialize for PrimitiveType {
                 scale: s,
             } => serializer.serialize_str(&format!("decimal({p},{s})")),
             Fixed(l) => serializer.serialize_str(&format!("fixed[{l}]")),
-            _ => PrimitiveType::serialize(&self, serializer),
+            _ => PrimitiveType::serialize(self, serializer),
         }
     }
 }
@@ -90,10 +90,12 @@ where
 
     let err_msg = format!("Invalid decimal format {}", this);
 
-    let caps = RE.captures(&this).ok_or(de::Error::custom(&err_msg))?;
+    let caps = RE
+        .captures(&this)
+        .ok_or_else(|| de::Error::custom(&err_msg))?;
     let precision: i32 = caps
         .name("p")
-        .ok_or(de::Error::custom(&err_msg))
+        .ok_or_else(|| de::Error::custom(&err_msg))
         .and_then(|p| {
             p.as_str()
                 .parse()
@@ -101,7 +103,7 @@ where
         })?;
     let scale: u8 = caps
         .name("s")
-        .ok_or(de::Error::custom(&err_msg))
+        .ok_or_else(|| de::Error::custom(&err_msg))
         .and_then(|p| {
             p.as_str()
                 .parse()
@@ -122,10 +124,12 @@ where
 
     let err_msg = format!("Invalid fixed format {}", this);
 
-    let caps = RE.captures(&this).ok_or(de::Error::custom(&err_msg))?;
+    let caps = RE
+        .captures(&this)
+        .ok_or_else(|| de::Error::custom(&err_msg))?;
     let length: u64 = caps
         .name("l")
-        .ok_or(de::Error::custom(&err_msg))
+        .ok_or_else(|| de::Error::custom(&err_msg))
         .and_then(|p| {
             p.as_str()
                 .parse()
@@ -196,6 +200,21 @@ pub struct Schema {
 
     /// List of fields.
     fields: Vec<StructField>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+/// A Scheama type that contains Schema elements.
+pub struct List {
+    #[serde(alias = "type")]
+    strcut_type: ListNestedType,
+
+    /// Unique identifier for the element
+    element_id: i32,
+
+    element_required: bool,
+
+    element: PrimitiveType,
 }
 
 #[cfg(test)]
@@ -343,5 +362,23 @@ mod tests {
         assert_eq!(1, result_struct.schema_id);
         assert_eq!(None, result_struct.identifier_field_ids);
         assert_eq!(1, result_struct.fields.len());
+    }
+
+    #[test]
+    fn test_list_type() {
+        let data = r#"
+                {  
+                    "type": "list",  
+                    "element-id": 3,  
+                    "element-required": true,  
+                    "element": "string"
+                }
+        "#;
+        let result_struct = serde_json::from_str::<List>(data);
+        println!("{:?}", result_struct);
+        let result_struct = result_struct.unwrap();
+        assert_eq!(3, result_struct.element_id);
+        assert!(result_struct.element_required);
+        assert_eq!(PrimitiveType::String, result_struct.element);
     }
 }
