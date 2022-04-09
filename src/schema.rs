@@ -9,7 +9,7 @@ use serde::{
 #[serde(rename_all = "lowercase")]
 #[serde(remote = "PrimitiveType")]
 /// Primiative Types within a schemam.
-enum PrimitiveType {
+pub enum PrimitiveType {
     /// True or False
     Boolean,
     /// 32-bit signed integer
@@ -41,6 +41,8 @@ enum PrimitiveType {
     Binary,
 }
 
+/// Serialize for PrimitiveType wit special handling for
+/// Decimal and Fixedt types.
 impl Serialize for PrimitiveType {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -48,16 +50,18 @@ impl Serialize for PrimitiveType {
     {
         use PrimitiveType::*;
         match self {
-           Decimal {
+            Decimal {
                 precision: p,
                 scale: s,
             } => serializer.serialize_str(&format!("decimal({p},{s})")),
             Fixed(l) => serializer.serialize_str(&format!("fixed[{l}]")),
-            _ => PrimitiveType::serialize(&self, serializer)
-}
+            _ => PrimitiveType::serialize(&self, serializer),
+        }
     }
 }
 
+/// Serialize for PrimitiveType wit special handling for
+/// Decimal and Fixedt types.
 impl<'de> Deserialize<'de> for PrimitiveType {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -74,6 +78,7 @@ impl<'de> Deserialize<'de> for PrimitiveType {
     }
 }
 
+/// Parsing for the Decimal PrimitiveType
 fn deserialize_decimal<'de, D>(deserializer: D) -> Result<PrimitiveType, D::Error>
 where
     D: Deserializer<'de>,
@@ -105,6 +110,7 @@ where
     Ok(PrimitiveType::Decimal { precision, scale })
 }
 
+/// Deserialize for the Fixed PrimitiveType
 fn deserialize_fixed<'de, D>(deserializer: D) -> Result<PrimitiveType, D::Error>
 where
     D: Deserializer<'de>,
@@ -268,7 +274,10 @@ mod tests {
             PrimitiveType::Long,
             PrimitiveType::Float,
             PrimitiveType::Double,
-            PrimitiveType::Decimal{precision: 1, scale: 2},
+            PrimitiveType::Decimal {
+                precision: 1,
+                scale: 2,
+            },
             PrimitiveType::Date,
             PrimitiveType::Time,
             PrimitiveType::Timestamp,
