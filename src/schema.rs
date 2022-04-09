@@ -210,8 +210,7 @@ pub struct List {
 
     element_required: bool,
 
-    element: PrimitiveType
-
+    element: PrimitiveType,
 }
 
 #[cfg(test)]
@@ -377,5 +376,5 @@ mod tests {
         assert_eq!(3, result_struct.element_id);
         assert!(result_struct.element_required);
         assert_eq!(PrimitiveType::String, result_struct.element);
-     }
+    }
 }
