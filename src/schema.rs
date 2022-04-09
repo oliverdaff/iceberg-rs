@@ -55,7 +55,7 @@ impl Serialize for PrimitiveType {
                 scale: s,
             } => serializer.serialize_str(&format!("decimal({p},{s})")),
             Fixed(l) => serializer.serialize_str(&format!("fixed[{l}]")),
-            _ => PrimitiveType::serialize(&self, serializer),
+            _ => PrimitiveType::serialize(self, serializer),
         }
     }
 }
@@ -90,10 +90,12 @@ where
 
     let err_msg = format!("Invalid decimal format {}", this);
 
-    let caps = RE.captures(&this).ok_or(de::Error::custom(&err_msg))?;
+    let caps = RE
+        .captures(&this)
+        .ok_or_else(|| de::Error::custom(&err_msg))?;
     let precision: i32 = caps
         .name("p")
-        .ok_or(de::Error::custom(&err_msg))
+        .ok_or_else(|| de::Error::custom(&err_msg))
         .and_then(|p| {
             p.as_str()
                 .parse()
@@ -101,7 +103,7 @@ where
         })?;
     let scale: u8 = caps
         .name("s")
-        .ok_or(de::Error::custom(&err_msg))
+        .ok_or_else(|| de::Error::custom(&err_msg))
         .and_then(|p| {
             p.as_str()
                 .parse()
@@ -122,10 +124,12 @@ where
 
     let err_msg = format!("Invalid fixed format {}", this);
 
-    let caps = RE.captures(&this).ok_or(de::Error::custom(&err_msg))?;
+    let caps = RE
+        .captures(&this)
+        .ok_or_else(|| de::Error::custom(&err_msg))?;
     let length: u64 = caps
         .name("l")
-        .ok_or(de::Error::custom(&err_msg))
+        .ok_or_else(|| de::Error::custom(&err_msg))
         .and_then(|p| {
             p.as_str()
                 .parse()
