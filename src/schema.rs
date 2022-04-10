@@ -204,10 +204,10 @@ pub struct Schema {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-/// A Scheama type that contains Schema elements.
+/// A Scheama type that contains List  elements.
 pub struct List {
     #[serde(alias = "type")]
-    strcut_type: ListNestedType,
+    struct_type: ListNestedType,
 
     /// Unique identifier for the element
     element_id: i32,
@@ -215,6 +215,30 @@ pub struct List {
     element_required: bool,
 
     element: PrimitiveType,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+/// A Schema type that contains Map elements.
+/// A map is a collection of key-value pairs with a key type and a value type.
+/// Both the key field and value field each have an integer id that is unique
+/// in the table schema. Map keys are required and map values can be either
+/// optional or required. Both map keys and map values may be any type,
+/// including nested types.
+pub struct Map {
+    #[serde(alias = "type")]
+    struct_type: MapNestedType,
+
+    ///Unique key field id
+    key_id: i32,
+    ///Type of the map key
+    key: PrimitiveType,
+    ///Unique key for the value id
+    value_id: i32,
+    ///Indicates if the value is required.
+    value_required: bool,
+    ///Type of the value.
+    value: PrimitiveType,
 }
 
 #[cfg(test)]
@@ -375,10 +399,29 @@ mod tests {
                 }
         "#;
         let result_struct = serde_json::from_str::<List>(data);
-        println!("{:?}", result_struct);
         let result_struct = result_struct.unwrap();
         assert_eq!(3, result_struct.element_id);
         assert!(result_struct.element_required);
         assert_eq!(PrimitiveType::String, result_struct.element);
+    }
+
+    #[test]
+    fn test_map_type() {
+        let data = r#"
+        {  
+            "type": "map",
+            "key-id": 4,
+            "key": "string",
+            "value-id": 5,
+            "value-required": false,
+            "value": "double"
+        }
+        "#;
+        let result_struct = serde_json::from_str::<Map>(data);
+        let result_struct = result_struct.unwrap();
+        assert_eq!(MapNestedType::Map, result_struct.struct_type);
+        assert_eq!(4, result_struct.key_id);
+        assert!(!result_struct.value_required);
+        assert_eq!(PrimitiveType::Double, result_struct.value);
     }
 }
