@@ -159,6 +159,15 @@ enum MapNestedType {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+enum AllType {
+    Primitive(PrimitiveType),
+    Struct(Struct),
+    List(List),
+    Map(Map),
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 /// A struct is a tuple of typed values. Each field in the tuple is
 /// named and has an integer id that is unique in the table schema.
 /// Each field can be either optional or required, meaning that values can (or cannot) be null.
@@ -181,7 +190,7 @@ pub struct StructField {
     /// Optional or required, meaning that values can (or can not be null)
     required: bool,
     // Field can have any type
-    field_type: PrimitiveType,
+    field_type: AllType,
     /// Fields can have any optional comment or doc string.
     doc: Option<String>,
 }
@@ -214,7 +223,7 @@ pub struct List {
 
     element_required: bool,
 
-    element: PrimitiveType,
+    element: Box<AllType>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -232,13 +241,13 @@ pub struct Map {
     ///Unique key field id
     key_id: i32,
     ///Type of the map key
-    key: PrimitiveType,
+    key: Box<AllType>,
     ///Unique key for the value id
     value_id: i32,
     ///Indicates if the value is required.
     value_required: bool,
     ///Type of the value.
-    value: PrimitiveType,
+    value: Box<AllType>,
 }
 
 #[cfg(test)]
@@ -274,10 +283,10 @@ mod tests {
         let result_struct = serde_json::from_str::<StructField>(data).unwrap();
         assert!(matches!(
             result_struct.field_type,
-            PrimitiveType::Decimal {
+            AllType::Primitive(PrimitiveType::Decimal {
                 precision: 1,
                 scale: 1
-            }
+            })
         ));
 
         let invalid_decimal_data = r#"
@@ -302,7 +311,10 @@ mod tests {
         }
         "#;
         let result_struct = serde_json::from_str::<StructField>(data).unwrap();
-        assert!(matches!(result_struct.field_type, PrimitiveType::Boolean));
+        assert!(matches!(
+            result_struct.field_type,
+            AllType::Primitive(PrimitiveType::Boolean)
+        ));
     }
 
     #[test]
@@ -316,7 +328,10 @@ mod tests {
         }
         "#;
         let result_struct = serde_json::from_str::<StructField>(data).unwrap();
-        assert!(matches!(result_struct.field_type, PrimitiveType::Fixed(1),));
+        assert!(matches!(
+            result_struct.field_type,
+            AllType::Primitive(PrimitiveType::Fixed(1),)
+        ));
 
         let invalid_fixed_data = r#"
         {
@@ -356,13 +371,13 @@ mod tests {
                 id: 1,
                 name: "name".to_string(),
                 required: true,
-                field_type: primitive.clone(),
+                field_type: AllType::Primitive(primitive.clone()),
                 doc: None,
             };
 
             let j = serde_json::to_string(&sf).unwrap();
             let unserde: StructField = serde_json::from_str(&j).unwrap();
-            assert_eq!(unserde.field_type, primitive);
+            assert_eq!(unserde.field_type, AllType::Primitive(primitive));
         }
     }
 
@@ -402,7 +417,10 @@ mod tests {
         let result_struct = result_struct.unwrap();
         assert_eq!(3, result_struct.element_id);
         assert!(result_struct.element_required);
-        assert_eq!(PrimitiveType::String, result_struct.element);
+        assert_eq!(
+            AllType::Primitive(PrimitiveType::String),
+            *result_struct.element
+        );
     }
 
     #[test]
@@ -422,6 +440,13 @@ mod tests {
         assert_eq!(MapNestedType::Map, result_struct.struct_type);
         assert_eq!(4, result_struct.key_id);
         assert!(!result_struct.value_required);
-        assert_eq!(PrimitiveType::Double, result_struct.value);
+        assert_eq!(
+            AllType::Primitive(PrimitiveType::Double),
+            *result_struct.value
+        );
+        assert_eq!(
+            AllType::Primitive(PrimitiveType::String),
+            *result_struct.key
+        );
     }
 }
