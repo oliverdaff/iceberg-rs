@@ -1,4 +1,4 @@
-use crate::schema;
+use crate::{partition::PartitionSpec, schema};
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use uuid::Uuid;
@@ -29,6 +29,12 @@ struct TableMetadataV2 {
     schemas: Vec<schema::Schema>,
     //ID of the table’s current schema.
     current_schema_id: i32,
+    /// A list of partition specs, stored as full partition spec objects.
+    partition_specs: Vec<PartitionSpec>,
+    /// ID of the “current” spec that writers should use by default.
+    default_spec_id: i32,
+    /// An integer; the highest assigned partition field ID across all partition specs for the table.
+    last_partition_id: i32,
 }
 
 impl<'de> Deserialize<'de> for TableMetadataV2 {
@@ -76,7 +82,22 @@ mod tests {
                         ]
                     }
                 ],
-                "current-schema-id" : 1
+                "current-schema-id" : 1,
+                "partition-specs": [
+                    {
+                        "spec-id": 1,
+                        "fields": [
+                            {  
+                                "source-id": 4,  
+                                "field-id": 1000,  
+                                "name": "ts_day",  
+                                "transform": "day"
+                            } 
+                        ]
+                    }
+                ],
+                "default-spec-id": 1,
+                "last-partition-id": 1
             }
         "#;
         let metadata = serde_json::from_str::<TableMetadataV2>(&data)?;
