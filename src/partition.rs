@@ -52,7 +52,7 @@ impl Serialize for PartitionTransform {
         match self {
             Bucket(mod_n) => serializer.serialize_str(&format!("bucket[{mod_n}]")),
             Truncate(width) => serializer.serialize_str(&format!("truncate[{width}]")),
-            _ => PartitionTransform::serialize(&self, serializer),
+            _ => PartitionTransform::serialize(self, serializer),
         }
     }
 }
