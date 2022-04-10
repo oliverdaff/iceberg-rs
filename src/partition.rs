@@ -107,6 +107,7 @@ where
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+/// Tables are configured with a partition spec that defines how to produce a tuple of partition values from a record.
 pub struct PartitionField {
     /// A source column id from the table’s schema
     source_id: i32,
@@ -117,6 +118,15 @@ pub struct PartitionField {
     name: String,
     /// A transform that is applied to the source column to produce a partition value.
     transform: PartitionTransform,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct PartitionSpec {
+    /// Identifier for the specification
+    spec_id: i32,
+    /// Fields for the specification
+    fields: Vec<PartitionField>,
 }
 
 #[cfg(test)]
