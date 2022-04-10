@@ -1,3 +1,4 @@
+use crate::schema;
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use uuid::Uuid;
@@ -24,6 +25,10 @@ struct TableMetadataV2 {
     last_updated_ms: i64,
     /// An integer; the highest assigned column ID for the table.
     last_column_id: i32,
+    //A list of schemas, stored as objects with schema-id.
+    schemas: Vec<schema::Schema>,
+    //ID of the table’s current schema.
+    current_schema_id: i32,
 }
 
 impl<'de> Deserialize<'de> for TableMetadataV2 {
@@ -56,7 +61,22 @@ mod tests {
                 "location": "s3://b/wh/data.db/table",
                 "last-sequence-number" : 1,
                 "last-updated-ms": 1515100955770,
-                "last-column-id": 1
+                "last-column-id": 1,
+                "schemas": [
+                    {
+                        "schema-id" : 1,
+                        "type" : "struct",
+                        "fields" :[
+                            {
+                                "id": 1,
+                                "name": "struct_name",
+                                "required": true,
+                                "field_type": "fixed[1]"
+                            }
+                        ]
+                    }
+                ],
+                "current-schema-id" : 1
             }
         "#;
         let metadata = serde_json::from_str::<TableMetadataV2>(&data)?;
