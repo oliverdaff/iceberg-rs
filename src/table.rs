@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{partition::PartitionSpec, schema};
 use serde::{de::Error, Deserialize, Deserializer, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -35,6 +37,10 @@ struct TableMetadataV2 {
     default_spec_id: i32,
     /// An integer; the highest assigned partition field ID across all partition specs for the table.
     last_partition_id: i32,
+    ///A string to string map of table properties. This is used to control settings that
+    /// affect reading and writing and is not intended to be used for arbitrary metadata.
+    /// For example, commit.retry.num-retries is used to control the number of commit retries.
+    properties: Option<HashMap<String, String>>,
 }
 
 impl<'de> Deserialize<'de> for TableMetadataV2 {
@@ -97,7 +103,10 @@ mod tests {
                     }
                 ],
                 "default-spec-id": 1,
-                "last-partition-id": 1
+                "last-partition-id": 1,
+                "properties": {
+                    "commit.retry.num-retries": "1"
+                }
             }
         "#;
         let metadata = serde_json::from_str::<TableMetadataV2>(&data)?;
