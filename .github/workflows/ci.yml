@@ -26,8 +26,8 @@ jobs:
           - os: macos-latest
             rust: stable
             make:
-              name: Clippy
-              name: Rustfmt
+              - name: Clippy
+              - name: Rustfmt
     env:
       RUST_BACKTRACE: full
       RUSTV: ${{ matrix.rust }}
