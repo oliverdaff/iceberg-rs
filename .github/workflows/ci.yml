@@ -14,6 +14,8 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         rust: [stable]
         make:
+          - name: Rustfmt
+            task: "check-fmt"
           - name: Clippy
             task: "check-clippy"
           - name: Unit tests
