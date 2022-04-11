@@ -16,8 +16,8 @@ jobs:
         make:
           - name: Rustfmt
             task: "check-fmt"
-           - name: Clippy
-            task: "install-clippy"
+          - task: "install-clippy"
+          - name: Clippy
             task: "check-clippy"
           - name: Unit tests
             task: "build-all-test run-all-unit-test"
