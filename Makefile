@@ -24,3 +24,6 @@ run-all-doc-test:
 
 # Run validation checks
 validate: check-clippy check-fmt test
+
+install-clippy:
+	rustup component add clippy
