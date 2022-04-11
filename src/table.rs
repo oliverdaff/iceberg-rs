@@ -1,22 +1,22 @@
 use std::collections::HashMap;
 
 use crate::{partition::PartitionSpec, schema};
-use serde::{de::Error, Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize_repr, Deserialize_repr, PartialEq)]
 #[repr(u8)]
-enum TableMetadataFormatVersion {
-    V1 = 1,
+/// A Enum that represents TableMetadataV2 version number.
+enum V2Version {
     V2 = 2,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case", remote = "Self")]
+#[serde(rename_all = "kebab-case")]
 struct TableMetadataV2 {
     /// Integer Version for the format.
-    format_version: TableMetadataFormatVersion,
+    format_version: V2Version,
     /// A UUID that identifies the table
     table_uuid: Uuid,
     /// Location tables base location
@@ -41,21 +41,6 @@ struct TableMetadataV2 {
     /// affect reading and writing and is not intended to be used for arbitrary metadata.
     /// For example, commit.retry.num-retries is used to control the number of commit retries.
     properties: Option<HashMap<String, String>>,
-}
-
-impl<'de> Deserialize<'de> for TableMetadataV2 {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let this = Self::deserialize(deserializer)?;
-
-        if !matches!(this.format_version, TableMetadataFormatVersion::V2) {
-            return Err(D::Error::custom("format-version should be 2"));
-        }
-
-        Ok(this)
-    }
 }
 
 #[cfg(test)]
@@ -112,7 +97,7 @@ mod tests {
         let metadata = serde_json::from_str::<TableMetadataV2>(&data)?;
         assert!(matches!(
             metadata.format_version,
-            crate::table::TableMetadataFormatVersion::V2
+            crate::table::V2Version::V2
         ));
         Ok(())
     }
