@@ -7,7 +7,7 @@ build:
 test:
 	cargo test
 
-check-clippy:
+check-clippy: install-clippy
 	cargo clippy
 
 check-fmt:
