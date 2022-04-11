@@ -8,7 +8,7 @@ use serde::{
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "lowercase")]
 #[serde(remote = "Self")]
-enum PartitionTransform {
+pub enum Transform {
     /// Always produces `null`
     Void,
     /// Source value, unmodified
@@ -27,7 +27,7 @@ enum PartitionTransform {
     Truncate(u32),
 }
 
-impl<'de> Deserialize<'de> for PartitionTransform {
+impl<'de> Deserialize<'de> for Transform {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -38,26 +38,26 @@ impl<'de> Deserialize<'de> for PartitionTransform {
         } else if s.starts_with("truncate") {
             deserialize_truncate(s.into_deserializer())
         } else {
-            PartitionTransform::deserialize(s.into_deserializer())
+            Transform::deserialize(s.into_deserializer())
         }
     }
 }
 
-impl Serialize for PartitionTransform {
+impl Serialize for Transform {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        use PartitionTransform::*;
+        use Transform::*;
         match self {
             Bucket(mod_n) => serializer.serialize_str(&format!("bucket[{mod_n}]")),
             Truncate(width) => serializer.serialize_str(&format!("truncate[{width}]")),
-            _ => PartitionTransform::serialize(self, serializer),
+            _ => Transform::serialize(self, serializer),
         }
     }
 }
 
-fn deserialize_bucket<'de, D>(deserializer: D) -> Result<PartitionTransform, D::Error>
+fn deserialize_bucket<'de, D>(deserializer: D) -> Result<Transform, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -78,10 +78,10 @@ where
                 .parse()
                 .map_err(|_| de::Error::custom("bucket not u32"))
         })?;
-    Ok(PartitionTransform::Bucket(bucket))
+    Ok(Transform::Bucket(bucket))
 }
 
-fn deserialize_truncate<'de, D>(deserializer: D) -> Result<PartitionTransform, D::Error>
+fn deserialize_truncate<'de, D>(deserializer: D) -> Result<Transform, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -102,7 +102,7 @@ where
                 .parse()
                 .map_err(|_| de::Error::custom("bucket not u32"))
         })?;
-    Ok(PartitionTransform::Truncate(width))
+    Ok(Transform::Truncate(width))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -117,7 +117,7 @@ pub struct PartitionField {
     /// A partition name.
     name: String,
     /// A transform that is applied to the source column to produce a partition value.
-    transform: PartitionTransform,
+    transform: Transform,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -148,20 +148,20 @@ mod tests {
         assert_eq!(4, partition_field.source_id);
         assert_eq!(1000, partition_field.field_id);
         assert_eq!("ts_day", partition_field.name);
-        assert_eq!(PartitionTransform::Day, partition_field.transform);
+        assert_eq!(Transform::Day, partition_field.transform);
     }
 
     #[test]
     fn test_all_transforms() {
         let transforms = vec![
-            PartitionTransform::Void,
-            PartitionTransform::Identity,
-            PartitionTransform::Year,
-            PartitionTransform::Month,
-            PartitionTransform::Day,
-            PartitionTransform::Hour,
-            PartitionTransform::Bucket(10),
-            PartitionTransform::Truncate(10),
+            Transform::Void,
+            Transform::Identity,
+            Transform::Year,
+            Transform::Month,
+            Transform::Day,
+            Transform::Hour,
+            Transform::Bucket(10),
+            Transform::Truncate(10),
         ];
         for transform in transforms {
             let field = PartitionField {
