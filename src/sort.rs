@@ -30,6 +30,18 @@ struct SortField {
     null_order: NullOrder,
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+/// A sort order is defined by an sort order id and a list of sort fields.
+/// The order of the sort fields within the list defines the order in
+/// which the sort is applied to the data.
+struct SortOrder {
+    /// Identifier for SortOrder, order_id `0` is no sort order.
+    order_id: i32,
+    /// Details of the sort
+    fields: Vec<SortField>,
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -51,5 +63,25 @@ mod tests {
         assert_eq!(Transform::Bucket(4), field.transform);
         assert_eq!(SortDirecion::Descending, field.direction);
         assert_eq!(NullOrder::Last, field.null_order);
+    }
+
+    #[test]
+    fn test_sort_order() {
+        let data = r#"
+            {
+                "order-id" : 1,
+                "fields": [
+                    {
+                        "transform": "bucket[4]",   
+                        "source-id": 3,   
+                        "direction": "desc",   
+                        "null-order": "nulls-last"
+                    }]
+            } 
+        "#;
+
+        let field: SortOrder = serde_json::from_str(&data).unwrap();
+        assert_eq!(1, field.order_id);
+        assert_eq!(1, field.fields.len());
     }
 }
