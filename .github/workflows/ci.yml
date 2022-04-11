@@ -27,6 +27,7 @@ jobs:
             rust: stable
             make:
               name: Clippy
+              name: Rustfmt
     env:
       RUST_BACKTRACE: full
       RUSTV: ${{ matrix.rust }}
