@@ -27,7 +27,11 @@ jobs:
             rust: stable
             make:
               name: Clippy
-    env:
+          - os: macos-latest
+            rust: stable
+            make:
+              name: Rustfmt
+     env:
       RUST_BACKTRACE: full
       RUSTV: ${{ matrix.rust }}
     steps:
