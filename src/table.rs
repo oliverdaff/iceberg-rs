@@ -1,11 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{
-    partition::PartitionSpec,
-    schema,
-    snapshot::{SnapshotLog, SnapshotV2},
-    sort,
-};
+use crate::{partition::PartitionSpec, schema, snapshot::SnapshotV2, sort};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use uuid::Uuid;
@@ -62,12 +57,38 @@ struct TableMetadataV2 {
     /// expired should be removed.
     snapshot_log: Option<Vec<SnapshotLog>>,
 
+    /// A list (optional) of timestamp and metadata file location pairs
+    /// that encodes changes to the previous metadata files for the table.
+    /// Each time a new metadata file is created, a new entry of the
+    /// previous metadata file location should be added to the list.
+    /// Tables can be configured to remove oldest metadata log entries and
+    /// keep a fixed-size log of the most recent entries after a commit.
+    metadata_log: Option<Vec<MetadataLog>>,
+
     /// A list of sort orders, stored as full sort order objects.
     sort_orders: Vec<sort::SortOrder>,
     /// Default sort order id of the table. Note that this could be used by
     /// writers, but is not used when reading because reads use the specs
     /// stored in manifest files.
     default_sort_order_id: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+/// Encodes changes to the previous metadata files for the table
+pub struct MetadataLog {
+    metadata_file: String,
+    // Time new metadata was created
+    timestamp_ms: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct SnapshotLog {
+    /// Id of the snapshot.
+    snapshot_id: i64,
+    /// Last updated timestamp
+    timestamp_ms: i64,
 }
 
 #[cfg(test)]
@@ -119,6 +140,12 @@ mod tests {
                 "properties": {
                     "commit.retry.num-retries": "1"
                 },
+                "metadata-log": [
+                    {  
+                        "metadata-file": "s3://bucket/.../v1.json",  
+                        "timestamp-ms": 1515100
+                    }
+                ],
                 "sort-orders": [],
                 "default-sort-order-id": 0
             }

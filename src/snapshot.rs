@@ -50,15 +50,6 @@ pub struct SnapshotV2 {
     schema_id: Option<i64>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub struct SnapshotLog {
-    /// Id of the snapshot.
-    snapshot_id: i64,
-    /// Last updated timestamp
-    timestamp_ms: i64,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
