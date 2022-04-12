@@ -1,6 +1,11 @@
 use std::collections::HashMap;
 
-use crate::{partition::PartitionSpec, schema};
+use crate::{
+    partition::PartitionSpec,
+    schema,
+    snapshot::{SnapshotLog, SnapshotV2},
+    sort,
+};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use uuid::Uuid;
@@ -41,6 +46,28 @@ struct TableMetadataV2 {
     /// affect reading and writing and is not intended to be used for arbitrary metadata.
     /// For example, commit.retry.num-retries is used to control the number of commit retries.
     properties: Option<HashMap<String, String>>,
+    /// long ID of the current table snapshot; must be the same as the current
+    /// ID of the main branch in refs.
+    current_snapshot_id: Option<i64>,
+    ///A list of valid snapshots. Valid snapshots are snapshots for which all
+    /// data files exist in the file system. A data file must not be deleted
+    /// from the file system until the last snapshot in which it was listed is
+    /// garbage collected.
+    snapshots: Option<Vec<SnapshotV2>>,
+    /// A list (optional) of timestamp and snapshot ID pairs that encodes changes
+    /// to the current snapshot for the table. Each time the current-snapshot-id
+    /// is changed, a new entry should be added with the last-updated-ms
+    /// and the new current-snapshot-id. When snapshots are expired from
+    /// the list of valid snapshots, all entries before a snapshot that has
+    /// expired should be removed.
+    snapshot_log: Option<Vec<SnapshotLog>>,
+
+    /// A list of sort orders, stored as full sort order objects.
+    sort_orders: Vec<sort::SortOrder>,
+    /// Default sort order id of the table. Note that this could be used by
+    /// writers, but is not used when reading because reads use the specs
+    /// stored in manifest files.
+    default_sort_order_id: i64,
 }
 
 #[cfg(test)]
@@ -91,7 +118,9 @@ mod tests {
                 "last-partition-id": 1,
                 "properties": {
                     "commit.retry.num-retries": "1"
-                }
+                },
+                "sort-orders": [],
+                "default-sort-order-id": 0
             }
         "#;
         let metadata = serde_json::from_str::<TableMetadataV2>(&data)?;

@@ -2,7 +2,7 @@ use crate::partition::Transform;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-enum SortDirecion {
+pub enum SortDirecion {
     #[serde(rename = "asc")]
     Ascending,
     #[serde(rename = "desc")]
@@ -10,7 +10,7 @@ enum SortDirecion {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-enum NullOrder {
+pub enum NullOrder {
     #[serde(rename = "nulls-first")]
     First,
     #[serde(rename = "nulls-last")]
@@ -19,7 +19,7 @@ enum NullOrder {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-struct SortField {
+pub struct SortField {
     /// A source column id from the table’s schema
     source_id: i32,
     /// A transform that is used to produce values to be sorted on from the source column.
@@ -35,7 +35,7 @@ struct SortField {
 /// A sort order is defined by an sort order id and a list of sort fields.
 /// The order of the sort fields within the list defines the order in
 /// which the sort is applied to the data.
-struct SortOrder {
+pub struct SortOrder {
     /// Identifier for SortOrder, order_id `0` is no sort order.
     order_id: i32,
     /// Details of the sort
