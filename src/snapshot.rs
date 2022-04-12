@@ -50,6 +50,27 @@ pub struct SnapshotV2 {
     schema_id: Option<i64>,
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct Reference {
+    snapshot_id: i64,
+    #[serde(flatten)]
+    retention: Retention,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case", tag = "type")]
+pub enum Retention {
+    #[serde(rename_all = "kebab-case")]
+    Branch {
+        min_snapshots_to_keep: i32,
+        max_snapshot_age_ms: i64,
+        max_ref_age_ms: i64,
+    },
+    #[serde(rename_all = "kebab-case")]
+    Tag { max_ref_age_ms: i64 },
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -70,5 +91,33 @@ mod tests {
         let snapshot: SnapshotV2 = serde_json::from_str(&data).unwrap();
         assert_eq!(Some(Operation::Append), snapshot.summary.operation);
         assert!(snapshot.summary.other.is_empty());
+    }
+
+    #[test]
+    fn test_tag_ref() {
+        let data = r#"
+            {
+                "snapshot-id": 3051729675574597004,
+                "type" : "tag",
+                "max-ref-age-ms": 1515100955770
+            }
+        "#;
+        let snapshot_ref: Reference = serde_json::from_str(data).unwrap();
+        assert!(matches!(snapshot_ref.retention, Retention::Tag { .. }));
+    }
+
+    #[test]
+    fn test_branch_ref() {
+        let data = r#"
+            {
+                "snapshot-id": 3051729675574597004,
+                "type" : "branch",
+                "min-snapshots-to-keep": 1,
+                "max-snapshot-age-ms": 1515100955770,
+                "max-ref-age-ms": 1515100955770
+            }
+        "#;
+        let snapshot_ref: Reference = serde_json::from_str(data).unwrap();
+        assert!(matches!(snapshot_ref.retention, Retention::Branch { .. }));
     }
 }

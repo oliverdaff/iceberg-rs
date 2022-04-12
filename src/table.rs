@@ -1,6 +1,11 @@
 use std::collections::HashMap;
 
-use crate::{partition::PartitionSpec, schema, snapshot::SnapshotV2, sort};
+use crate::{
+    partition::PartitionSpec,
+    schema,
+    snapshot::{Reference, SnapshotV2},
+    sort,
+};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use uuid::Uuid;
@@ -71,6 +76,11 @@ struct TableMetadataV2 {
     /// writers, but is not used when reading because reads use the specs
     /// stored in manifest files.
     default_sort_order_id: i64,
+    ///A map of snapshot references. The map keys are the unique snapshot reference
+    /// names in the table, and the map values are snapshot reference objects.
+    /// There is always a main branch reference pointing to the current-snapshot-id
+    /// even if the refs map is null.
+    refs: Option<HashMap<String, Reference>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
