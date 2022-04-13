@@ -1,3 +1,6 @@
+/*!
+Defines the table metadata.
+!*/
 use std::collections::HashMap;
 
 use crate::model::{
@@ -7,21 +10,13 @@ use crate::model::{
     sort,
 };
 use serde::{Deserialize, Serialize};
-use serde_repr::{Deserialize_repr, Serialize_repr};
 use uuid::Uuid;
 
-#[derive(Debug, Serialize_repr, Deserialize_repr, PartialEq)]
-#[repr(u8)]
-/// A Enum that represents TableMetadataV2 version number.
-enum V2Version {
-    V2 = 2,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-struct TableMetadataV2 {
+#[serde(rename_all = "kebab-case", tag = "format-version")]
+/// Fields for the version 2 of the table metadata.
+pub struct TableMetadataV2 {
     /// Integer Version for the format.
-    format_version: V2Version,
     /// A UUID that identifies the table
     table_uuid: Uuid,
     /// Location tables base location
@@ -94,6 +89,7 @@ pub struct MetadataLog {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+/// A log of when each snapshot was made.
 pub struct SnapshotLog {
     /// Id of the snapshot.
     snapshot_id: i64,
@@ -160,11 +156,7 @@ mod tests {
                 "default-sort-order-id": 0
             }
         "#;
-        let metadata = serde_json::from_str::<TableMetadataV2>(&data)?;
-        assert!(matches!(
-            metadata.format_version,
-            crate::model::table::V2Version::V2
-        ));
+        let _metadata = serde_json::from_str::<TableMetadataV2>(&data)?;
         Ok(())
     }
 
