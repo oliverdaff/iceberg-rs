@@ -1,4 +1,4 @@
-use crate::partition::Transform;
+use crate::model::partition::Transform;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
