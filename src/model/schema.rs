@@ -21,8 +21,12 @@ pub enum PrimitiveType {
     /// 64-bit IEEE 753 floating bit.
     Double,
     /// Fixed point decimal
-    /// TODO: Create this in spark and see what it looks like in the schema
-    Decimal { precision: i32, scale: u8 },
+    Decimal { 
+        /// The number of digits in the number.
+        precision: i32, 
+        /// The number of digits to the right of the decimal point.
+        scale: u8 
+    },
     /// Calendar date without timezone or time.
     Date,
     /// Time of day without date or timezone.
@@ -138,46 +142,29 @@ where
     Ok(PrimitiveType::Fixed(length))
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-/// Type for struct
-#[serde(rename_all = "lowercase")]
-enum StructNestedType {
-    Struct,
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-/// Type for List
-enum ListNestedType {
-    List,
-}
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-/// Type for Map
-enum MapNestedType {
-    Map,
-}
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
-enum AllType {
+/// A union type of all allowed Schema types.
+pub enum AllType {
+    /// All the primitive types
     Primitive(PrimitiveType),
+    /// A Struct type
     Struct(Struct),
+    /// A List type.
     List(List),
+    /// A Map type
     Map(Map),
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag="type")]
 /// A struct is a tuple of typed values. Each field in the tuple is
 /// named and has an integer id that is unique in the table schema.
 /// Each field can be either optional or required, meaning that values can (or cannot) be null.
 /// Fields may be any type.
 /// Fields may have an optional comment or doc string.
-struct Struct {
-    #[serde(alias = "type")]
-    struct_type: StructNestedType,
-
-    //
+pub struct Struct {
     fields: Vec<StructField>,
 }
 
@@ -203,24 +190,17 @@ pub struct Schema {
     /// Set of primitive fields that identify rows in a table.
     identifier_field_ids: Option<Vec<i32>>,
 
-    /// Always the string "struct".
-    #[serde(alias = "type")]
-    struct_type: StructNestedType,
-
-    /// List of fields.
-    fields: Vec<StructField>,
-
     /// Name Mapping
     name_mapping: Option<NameMappings>,
+
+    #[serde(flatten)]
+    struct_fields: Struct
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", tag="list")]
 /// A Scheama type that contains List  elements.
 pub struct List {
-    #[serde(alias = "type")]
-    struct_type: ListNestedType,
-
     /// Unique identifier for the element
     element_id: i32,
 
@@ -230,7 +210,7 @@ pub struct List {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", tag="type")]
 /// A Schema type that contains Map elements.
 /// A map is a collection of key-value pairs with a key type and a value type.
 /// Both the key field and value field each have an integer id that is unique
@@ -238,9 +218,6 @@ pub struct List {
 /// optional or required. Both map keys and map values may be any type,
 /// including nested types.
 pub struct Map {
-    #[serde(alias = "type")]
-    struct_type: MapNestedType,
-
     ///Unique key field id
     key_id: i32,
     ///Type of the map key
@@ -427,7 +404,7 @@ mod tests {
         let result_struct = serde_json::from_str::<Schema>(data).unwrap();
         assert_eq!(1, result_struct.schema_id);
         assert_eq!(None, result_struct.identifier_field_ids);
-        assert_eq!(1, result_struct.fields.len());
+        assert_eq!(1, result_struct.struct_fields.fields.len());
         assert_eq!(1, result_struct.name_mapping.unwrap().default.len());
     }
 
@@ -465,7 +442,6 @@ mod tests {
         "#;
         let result_struct = serde_json::from_str::<Map>(data);
         let result_struct = result_struct.unwrap();
-        assert_eq!(MapNestedType::Map, result_struct.struct_type);
         assert_eq!(4, result_struct.key_id);
         assert!(!result_struct.value_required);
         assert_eq!(
