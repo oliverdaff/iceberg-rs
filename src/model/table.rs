@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{
+use crate::model::{
     partition::PartitionSpec,
     schema,
     snapshot::{Reference, SnapshotV2},
@@ -163,7 +163,7 @@ mod tests {
         let metadata = serde_json::from_str::<TableMetadataV2>(&data)?;
         assert!(matches!(
             metadata.format_version,
-            crate::table::V2Version::V2
+            crate::model::table::V2Version::V2
         ));
         Ok(())
     }
