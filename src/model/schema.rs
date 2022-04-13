@@ -211,7 +211,7 @@ pub struct Schema {
     fields: Vec<StructField>,
 
     /// Name Mapping
-    name_mapping: Option<NameMappings>
+    name_mapping: Option<NameMappings>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -255,7 +255,7 @@ pub struct Map {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NameMappings {
-    default: Vec<NameMapping>
+    default: Vec<NameMapping>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
