@@ -209,6 +209,9 @@ pub struct Schema {
 
     /// List of fields.
     fields: Vec<StructField>,
+
+    /// Name Mapping
+    name_mapping: Option<NameMappings>
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -248,6 +251,22 @@ pub struct Map {
     value_required: bool,
     ///Type of the value.
     value: Box<AllType>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NameMappings {
+    default: Vec<NameMapping>
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub struct NameMapping {
+    /// An optional Iceberg field ID used when a field’s name is present in names
+    field_id: Option<i32>,
+    /// A required list of 0 or more names for a field.
+    names: Vec<String>,
+    /// An optional list of field mappings for child field of structs, maps, and lists.
+    fields: Option<Vec<NameMapping>>,
 }
 
 #[cfg(test)]
@@ -394,13 +413,22 @@ mod tests {
                     "required": true,
                     "field_type": "fixed[1]"
                 }
-            ]
+            ],
+            "name-mapping": {
+                "default" : [
+                    { 
+                        "field-id": 4, 
+                        "names": ["latitude", "lat"] 
+                    }
+                ]
+            }
         }
         "#;
         let result_struct = serde_json::from_str::<Schema>(data).unwrap();
         assert_eq!(1, result_struct.schema_id);
         assert_eq!(None, result_struct.identifier_field_ids);
         assert_eq!(1, result_struct.fields.len());
+        assert_eq!(1, result_struct.name_mapping.unwrap().default.len());
     }
 
     #[test]
@@ -448,5 +476,19 @@ mod tests {
             AllType::Primitive(PrimitiveType::String),
             *result_struct.key
         );
+    }
+
+    #[test]
+    fn test_name_mapping() {
+        let data = r#"
+        { "field-id": 3, "names": ["location"], "fields": [
+            { "field-id": 4, "names": ["latitude", "lat"] },
+            { "field-id": 5, "names": ["longitude", "long"] }
+        ] }        
+        "#;
+
+        let name_mapping: NameMapping = serde_json::from_str(data).unwrap();
+        assert_eq!(Some(3), name_mapping.field_id);
+        assert!(name_mapping.fields.is_some())
     }
 }
