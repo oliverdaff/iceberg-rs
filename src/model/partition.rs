@@ -1,5 +1,7 @@
-//!  Partition define how what the partition values are and how the are derived
-//! from the source fields.
+/*!
+ Partition define how what the partition values are and how the are derived
+from the source fields.
+*/
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{
@@ -7,10 +9,8 @@ use serde::{
     Deserialize, Deserializer, Serialize,
 };
 
-
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-#[serde(rename_all = "lowercase")]
-#[serde(remote = "Self")]
+#[serde(rename_all = "lowercase", remote = "Self")]
 /// A Transformation applied to each source column to produce a value.
 pub enum Transform {
     /// Always produces `null`
@@ -126,7 +126,7 @@ pub struct PartitionField {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-/// A definition of how partition values are derived from data fields. 
+/// A definition of how partition values are derived from data fields.
 pub struct PartitionSpec {
     /// Identifier for the specification
     spec_id: i32,

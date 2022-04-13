@@ -1,24 +1,34 @@
+/*!
+Definition of Sort orders for a Table.
+!*/
 use crate::model::partition::Transform;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+/// Defines the sort order for a field.
 pub enum SortDirecion {
+    /// Sort the field ascending.
     #[serde(rename = "asc")]
     Ascending,
+    /// Sort the field descending.
     #[serde(rename = "desc")]
     Descending,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+/// Defines the sort order for nulls in a field.
 pub enum NullOrder {
     #[serde(rename = "nulls-first")]
+    /// Place the nulls first in the search.
     First,
     #[serde(rename = "nulls-last")]
+    /// Place the nulls last in the search.
     Last,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+/// Definition of a how a field should be used within a sort.
 pub struct SortField {
     /// A source column id from the table’s schema
     source_id: i32,

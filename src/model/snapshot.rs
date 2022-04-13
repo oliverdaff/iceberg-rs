@@ -1,9 +1,14 @@
+/*!
+Details of snapshots for a table.
+!*/
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+/// The type of operations included in the snapshot, this allows
+/// certain snapshots to be skipped during operation.
 pub enum Operation {
     /// Only data files were added and no files were removed.
     Append,
@@ -20,6 +25,7 @@ pub enum Operation {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+/// Summarises the changes in the snapshot.
 pub struct Summary {
     operation: Option<Operation>,
 
@@ -29,6 +35,7 @@ pub struct Summary {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+/// A V2 compliant snapshot.
 pub struct SnapshotV2 {
     /// A unique long ID
     snapshot_id: i64,
@@ -52,7 +59,9 @@ pub struct SnapshotV2 {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+/// Iceberg tables keep track of branches and tags using snapshot references.
 pub struct Reference {
+    /// A reference’s snapshot ID. The tagged snapshot or latest snapshot of a branch.
     snapshot_id: i64,
     #[serde(flatten)]
     retention: Retention,
@@ -60,15 +69,29 @@ pub struct Reference {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "type")]
+/// Retention policy field, which differ based on it it
+/// is a Branch or Tag Reference
 pub enum Retention {
     #[serde(rename_all = "kebab-case")]
+    /// A branch reference
     Branch {
+        /// A positive number for the minimum number of snapshots to keep in a
+        /// branch while expiring snapshots.
         min_snapshots_to_keep: i32,
+        /// A positive number for the max age of snapshots to keep when expiring,
+        /// including the latest snapshot.
         max_snapshot_age_ms: i64,
+        /// A positive number for the max age of the snapshot reference to
+        /// keep while expiring snapshots.
         max_ref_age_ms: i64,
     },
     #[serde(rename_all = "kebab-case")]
-    Tag { max_ref_age_ms: i64 },
+    /// A tag reference.
+    Tag {
+        /// A positive number for the max age of the snapshot reference to
+        /// keep while expiring snapshots.
+        max_ref_age_ms: i64,
+    },
 }
 
 #[cfg(test)]

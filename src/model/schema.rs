@@ -1,3 +1,7 @@
+/*!
+A table’s schema is a list of named columns. All data types are either primitives or nested types, which are maps,
+lists, or structs. A table schema is also a struct type.
+*/
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{
@@ -21,11 +25,11 @@ pub enum PrimitiveType {
     /// 64-bit IEEE 753 floating bit.
     Double,
     /// Fixed point decimal
-    Decimal { 
+    Decimal {
         /// The number of digits in the number.
-        precision: i32, 
+        precision: i32,
         /// The number of digits to the right of the decimal point.
-        scale: u8 
+        scale: u8,
     },
     /// Calendar date without timezone or time.
     Date,
@@ -142,7 +146,6 @@ where
     Ok(PrimitiveType::Fixed(length))
 }
 
-
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 /// A union type of all allowed Schema types.
@@ -158,7 +161,7 @@ pub enum AllType {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag="type")]
+#[serde(tag = "type")]
 /// A struct is a tuple of typed values. Each field in the tuple is
 /// named and has an integer id that is unique in the table schema.
 /// Each field can be either optional or required, meaning that values can (or cannot) be null.
@@ -169,6 +172,7 @@ pub struct Struct {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+/// Details of a struct in a field.
 pub struct StructField {
     /// Unique Id
     id: i32,
@@ -184,6 +188,7 @@ pub struct StructField {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+/// Names and types of fields in a table.
 pub struct Schema {
     /// Identifier of the schema
     schema_id: i32,
@@ -194,12 +199,12 @@ pub struct Schema {
     name_mapping: Option<NameMappings>,
 
     #[serde(flatten)]
-    struct_fields: Struct
+    struct_fields: Struct,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case", tag="list")]
-/// A Scheama type that contains List  elements.
+#[serde(rename_all = "kebab-case", tag = "list")]
+/// A Schema type that contains List  elements.
 pub struct List {
     /// Unique identifier for the element
     element_id: i32,
@@ -210,7 +215,7 @@ pub struct List {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case", tag="type")]
+#[serde(rename_all = "kebab-case", tag = "type")]
 /// A Schema type that contains Map elements.
 /// A map is a collection of key-value pairs with a key type and a value type.
 /// Both the key field and value field each have an integer id that is unique
@@ -231,12 +236,15 @@ pub struct Map {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+/// Tables may also define a property schema.name-mapping.default with a JSON name mapping containing a list of field mapping objects.
+/// These mappings provide fallback field ids to be used when a data file does not contain field id information.
 pub struct NameMappings {
     default: Vec<NameMapping>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+/// Individual mapping within NameMappings.
 pub struct NameMapping {
     /// An optional Iceberg field ID used when a field’s name is present in names
     field_id: Option<i32>,
