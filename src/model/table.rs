@@ -14,7 +14,8 @@ use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case", tag = "format-version")]
-struct TableMetadataV2 {
+/// Fields for the version 2 of the table metadata.
+pub struct TableMetadataV2 {
     /// Integer Version for the format.
     /// A UUID that identifies the table
     table_uuid: Uuid,

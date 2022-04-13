@@ -12,7 +12,7 @@ use serde::{
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[serde(remote = "Self")]
-/// Primiative Types within a schemam.
+/// Primitive Types within a schema.
 pub enum PrimitiveType {
     /// True or False
     Boolean,
@@ -39,7 +39,7 @@ pub enum PrimitiveType {
     Timestamp,
     /// Timestamp with timezone
     Timestampz,
-    /// Arbitrary-length character sequeces
+    /// Arbitrary-length character sequences
     String,
     /// Universally Unique Identifiers
     Uuid,
@@ -69,7 +69,7 @@ impl Serialize for PrimitiveType {
 }
 
 /// Serialize for PrimitiveType wit special handling for
-/// Decimal and Fixedt types.
+/// Decimal and Fixed types.
 impl<'de> Deserialize<'de> for PrimitiveType {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
