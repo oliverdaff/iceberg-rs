@@ -1,6 +1,6 @@
 /*!
 Definition of Sort orders for a Table.
-!*/
+*/
 use crate::model::partition::Transform;
 use serde::{Deserialize, Serialize};
 
@@ -31,13 +31,13 @@ pub enum NullOrder {
 /// Definition of a how a field should be used within a sort.
 pub struct SortField {
     /// A source column id from the table’s schema
-    source_id: i32,
+    pub source_id: i32,
     /// A transform that is used to produce values to be sorted on from the source column.
-    transform: Transform,
+    pub transform: Transform,
     /// A sort direction, that can only be either asc or desc
-    direction: SortDirecion,
+    pub direction: SortDirecion,
     /// A null order that describes the order of null values when sorted.
-    null_order: NullOrder,
+    pub null_order: NullOrder,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -47,9 +47,9 @@ pub struct SortField {
 /// which the sort is applied to the data.
 pub struct SortOrder {
     /// Identifier for SortOrder, order_id `0` is no sort order.
-    order_id: i32,
+    pub order_id: i32,
     /// Details of the sort
-    fields: Vec<SortField>,
+    pub fields: Vec<SortField>,
 }
 
 #[cfg(test)]
