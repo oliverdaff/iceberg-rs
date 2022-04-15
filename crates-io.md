@@ -10,7 +10,7 @@ The [Iceberg](https://iceberg.apache.org/) table format is an open table format 
 ## Iceberg-rs in action
 
 ```rust
-use iceberg_rs::model::TableMetadataV2;
+use iceberg_rs::model::table::TableMetadataV2;
 
 fn main() {
    let data = r#"
