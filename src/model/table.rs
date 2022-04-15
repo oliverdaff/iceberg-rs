@@ -82,9 +82,10 @@ pub struct TableMetadataV2 {
 #[serde(rename_all = "kebab-case")]
 /// Encodes changes to the previous metadata files for the table
 pub struct MetadataLog {
-    metadata_file: String,
-    // Time new metadata was created
-    timestamp_ms: i64,
+    /// The file for the log.
+    pub metadata_file: String,
+    /// Time new metadata was created
+    pub timestamp_ms: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -92,9 +93,9 @@ pub struct MetadataLog {
 /// A log of when each snapshot was made.
 pub struct SnapshotLog {
     /// Id of the snapshot.
-    snapshot_id: i64,
+    pub snapshot_id: i64,
     /// Last updated timestamp
-    timestamp_ms: i64,
+    pub timestamp_ms: i64,
 }
 
 #[cfg(test)]
