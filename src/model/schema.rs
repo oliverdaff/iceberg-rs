@@ -168,22 +168,23 @@ pub enum AllType {
 /// Fields may be any type.
 /// Fields may have an optional comment or doc string.
 pub struct Struct {
-    fields: Vec<StructField>,
+    /// The fields of the struct.
+    pub fields: Vec<StructField>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 /// Details of a struct in a field.
 pub struct StructField {
     /// Unique Id
-    id: i32,
+    pub id: i32,
     /// Field Name
-    name: String,
+    pub name: String,
     /// Optional or required, meaning that values can (or can not be null)
-    required: bool,
-    // Field can have any type
-    field_type: AllType,
+    pub required: bool,
+    /// Field can have any type
+    pub field_type: AllType,
     /// Fields can have any optional comment or doc string.
-    doc: Option<String>,
+    pub doc: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -191,15 +192,16 @@ pub struct StructField {
 /// Names and types of fields in a table.
 pub struct Schema {
     /// Identifier of the schema
-    schema_id: i32,
+    pub schema_id: i32,
     /// Set of primitive fields that identify rows in a table.
-    identifier_field_ids: Option<Vec<i32>>,
+    pub identifier_field_ids: Option<Vec<i32>>,
 
     /// Name Mapping
-    name_mapping: Option<NameMappings>,
+    pub name_mapping: Option<NameMappings>,
 
     #[serde(flatten)]
-    struct_fields: Struct,
+    /// The struct fields
+    pub struct_fields: Struct,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -207,11 +209,13 @@ pub struct Schema {
 /// A Schema type that contains List  elements.
 pub struct List {
     /// Unique identifier for the element
-    element_id: i32,
+    pub element_id: i32,
 
-    element_required: bool,
+    /// If the element is mandatory.
+    pub element_required: bool,
 
-    element: Box<AllType>,
+    /// The type of the element.
+    pub element: Box<AllType>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -224,22 +228,23 @@ pub struct List {
 /// including nested types.
 pub struct Map {
     ///Unique key field id
-    key_id: i32,
+    pub key_id: i32,
     ///Type of the map key
-    key: Box<AllType>,
+    pub key: Box<AllType>,
     ///Unique key for the value id
-    value_id: i32,
+    pub value_id: i32,
     ///Indicates if the value is required.
-    value_required: bool,
+    pub value_required: bool,
     ///Type of the value.
-    value: Box<AllType>,
+    pub value: Box<AllType>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 /// Tables may also define a property schema.name-mapping.default with a JSON name mapping containing a list of field mapping objects.
 /// These mappings provide fallback field ids to be used when a data file does not contain field id information.
 pub struct NameMappings {
-    default: Vec<NameMapping>,
+    /// The default mappings.
+    pub default: Vec<NameMapping>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -247,11 +252,11 @@ pub struct NameMappings {
 /// Individual mapping within NameMappings.
 pub struct NameMapping {
     /// An optional Iceberg field ID used when a field’s name is present in names
-    field_id: Option<i32>,
+    pub field_id: Option<i32>,
     /// A required list of 0 or more names for a field.
-    names: Vec<String>,
+    pub names: Vec<String>,
     /// An optional list of field mappings for child field of structs, maps, and lists.
-    fields: Option<Vec<NameMapping>>,
+    pub fields: Option<Vec<NameMapping>>,
 }
 
 #[cfg(test)]

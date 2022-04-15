@@ -114,14 +114,14 @@ where
 /// Tables are configured with a partition spec that defines how to produce a tuple of partition values from a record.
 pub struct PartitionField {
     /// A source column id from the table’s schema
-    source_id: i32,
+    pub source_id: i32,
     /// A partition field id that is used to identify a partition field and is unique within a partition spec.
     /// In v2 table metadata, it is unique across all partition specs.
-    field_id: i32,
+    pub field_id: i32,
     /// A partition name.
-    name: String,
+    pub name: String,
     /// A transform that is applied to the source column to produce a partition value.
-    transform: Transform,
+    pub transform: Transform,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -129,9 +129,9 @@ pub struct PartitionField {
 /// A definition of how partition values are derived from data fields.
 pub struct PartitionSpec {
     /// Identifier for the specification
-    spec_id: i32,
+    pub spec_id: i32,
     /// Fields for the specification
-    fields: Vec<PartitionField>,
+    pub fields: Vec<PartitionField>,
 }
 
 #[cfg(test)]
