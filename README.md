@@ -101,10 +101,6 @@ If you’d like to contribute, please fork the repository and use a feature bran
 
 Please validate all submission with `make validate`.
 
-## Getting Help
-
-
-
 #### License
 
 <sup>
