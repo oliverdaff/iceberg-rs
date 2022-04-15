@@ -1,5 +1,6 @@
 /*!
-Classes that model the Iceberg spec.
+Structs that model the Iceberg spec.  These structs will
+serialise and deserialise the JSON.
 */
 
 pub mod partition;
