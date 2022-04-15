@@ -27,10 +27,11 @@ pub enum Operation {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 /// Summarises the changes in the snapshot.
 pub struct Summary {
-    operation: Option<Operation>,
-
+    /// The type of operation in the snapshot
+    pub operation: Option<Operation>,
+    /// Other summary data.
     #[serde(flatten)]
-    other: HashMap<String, String>,
+    pub other: HashMap<String, String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -38,23 +39,23 @@ pub struct Summary {
 /// A V2 compliant snapshot.
 pub struct SnapshotV2 {
     /// A unique long ID
-    snapshot_id: i64,
+    pub snapshot_id: i64,
     /// The snapshot ID of the snapshot’s parent.
     /// Omitted for any snapshot with no parent
-    parent_snapshot_id: Option<i64>,
+    pub parent_snapshot_id: Option<i64>,
     /// A monotonically increasing long that tracks the order of
     /// changes to a table.
-    sequence_number: i64,
+    pub sequence_number: i64,
     /// A timestamp when the snapshot was created, used for garbage
     /// collection and table inspection
-    timestamp_ms: i64,
+    pub timestamp_ms: i64,
     /// The location of a manifest list for this snapshot that
     /// tracks manifest files with additional meadata.
-    manifest_list: String,
+    pub manifest_list: String,
     /// A string map that summarizes the snapshot changes, including operation.
-    summary: Summary,
+    pub summary: Summary,
     /// ID of the table’s current schema when the snapshot was created.
-    schema_id: Option<i64>,
+    pub schema_id: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -62,9 +63,10 @@ pub struct SnapshotV2 {
 /// Iceberg tables keep track of branches and tags using snapshot references.
 pub struct Reference {
     /// A reference’s snapshot ID. The tagged snapshot or latest snapshot of a branch.
-    snapshot_id: i64,
+    pub snapshot_id: i64,
     #[serde(flatten)]
-    retention: Retention,
+    /// The retention policy for the reference.
+    pub retention: Retention,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
