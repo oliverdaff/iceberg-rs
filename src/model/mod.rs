@@ -1,6 +1,6 @@
 /*!
 Classes that model the Iceberg spec.
-!*/
+*/
 
 pub mod partition;
 pub mod schema;

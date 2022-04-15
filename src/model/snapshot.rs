@@ -1,6 +1,6 @@
 /*!
 Details of snapshots for a table.
-!*/
+*/
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};

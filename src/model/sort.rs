@@ -1,6 +1,6 @@
 /*!
 Definition of Sort orders for a Table.
-!*/
+*/
 use crate::model::partition::Transform;
 use serde::{Deserialize, Serialize};
 
