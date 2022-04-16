@@ -76,7 +76,7 @@ pub struct Reference {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case", tag = "type")]
+#[serde(rename_all = "lowercase", tag = "type")]
 /// Retention policy field, which differ based on it it
 /// is a Branch or Tag Reference
 pub enum Retention {
@@ -150,5 +150,27 @@ mod tests {
         "#;
         let snapshot_ref: Reference = serde_json::from_str(data).unwrap();
         assert!(matches!(snapshot_ref.retention, Retention::Branch { .. }));
+    }
+
+    #[test]
+    fn test_retention_branch() {
+        let retention = Retention::Branch{
+            min_snapshots_to_keep: 1,
+            max_snapshot_age_ms: 1,
+            max_ref_age_ms: 1
+        };
+        let json = serde_json::to_string(&retention).unwrap();
+        let result : Retention = serde_json::from_str(&json).unwrap();
+        assert!(matches!(result, Retention::Branch{..}))
+    }
+
+    #[test]
+    fn test_retention_tag() {
+        let retention = Retention::Tag{
+            max_ref_age_ms: 1
+        };
+        let json = serde_json::to_string(&retention).unwrap();
+        let result : Retention = serde_json::from_str(&json).unwrap();
+        assert!(matches!(result, Retention::Tag{..}))
     }
 }
