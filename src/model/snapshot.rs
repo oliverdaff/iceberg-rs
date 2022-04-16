@@ -1,5 +1,11 @@
 /*!
-Details of snapshots for a table.
+Details of [snapshots](https://iceberg.apache.org/spec/#snapshots) for a table.
+
+A [SnapshotV2] contains a pointer to the ManifestList as well as supporting data for the Snapshot.
+
+A [Reference] is a named pointer to a [SnapshotV2] stored in the [refs field of the TableMetadataV2](crate::model::table::TableMetadataV2#structfield.refs).
+a [Reference] can be a [Tag](Retention#variant.Tag) or [Branch](Retention#variant.Branch).
+
 */
 use std::collections::HashMap;
 
@@ -50,7 +56,7 @@ pub struct SnapshotV2 {
     /// collection and table inspection
     pub timestamp_ms: i64,
     /// The location of a manifest list for this snapshot that
-    /// tracks manifest files with additional meadata.
+    /// tracks manifest files with additional metadata.
     pub manifest_list: String,
     /// A string map that summarizes the snapshot changes, including operation.
     pub summary: Summary,
