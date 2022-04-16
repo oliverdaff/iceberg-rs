@@ -4,8 +4,7 @@
 
 ---
 
-The [Iceberg](https://iceberg.apache.org/) table format is an open table format for analytic datasets. This project is a Rust implementation of the [Iceberg spec](https://iceberg.apache.org/spec/)
-
+The [Iceberg](https://iceberg.apache.org/) is an open table format for analytic datasets. It is very convenient to access the Iceberg table information to do things like view schema details, track changes, and view snapshots. This project is a Rust implementation of the [Iceberg spec](https://iceberg.apache.org/spec/).
 
 ## Iceberg-rs in action
 
