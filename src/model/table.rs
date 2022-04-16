@@ -13,7 +13,7 @@ use crate::model::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "format-version")]
 /// Fields for the version 2 of the table metadata.
 pub struct TableMetadataV2 {
@@ -158,7 +158,11 @@ mod tests {
                 "default-sort-order-id": 0
             }
         "#;
-        let _metadata = serde_json::from_str::<TableMetadataV2>(&data)?;
+        let metadata = serde_json::from_str::<TableMetadataV2>(&data)?;
+        //test serialise deserialise works.
+        let metadata_two: TableMetadataV2 = serde_json::from_str(&serde_json::to_string(&metadata)?)?;
+        assert_eq!(metadata, metadata_two);
+
         Ok(())
     }
 
