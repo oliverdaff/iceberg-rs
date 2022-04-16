@@ -1,5 +1,6 @@
 /*!
-Defines the table metadata.
+Defines the [table metadata](https://iceberg.apache.org/spec/#table-metadata).
+The main struct here is [TableMetadataV2] which defines the data for a table.
 */
 use std::collections::HashMap;
 
@@ -28,7 +29,7 @@ pub struct TableMetadataV2 {
     /// An integer; the highest assigned column ID for the table.
     pub last_column_id: i32,
     /// A list of schemas, stored as objects with schema-id.
-    pub schemas: Vec<schema::Schema>,
+    pub schemas: Vec<schema::SchemaV2>,
     /// ID of the table’s current schema.
     pub current_schema_id: i32,
     /// A list of partition specs, stored as full partition spec objects.

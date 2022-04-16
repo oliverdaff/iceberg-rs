@@ -1,6 +1,6 @@
 /*!
-A table’s schema is a list of named columns. All data types are either primitives or nested types, which are maps,
-lists, or structs. A table schema is also a struct type.
+A table’s [schema](https://iceberg.apache.org/spec/#schemas-and-data-types) is a list of named columns, represented by [SchemaV2].
+All data types are either [primitives](PrimitiveType) or nested types, which are [Map], [List], or [Struct]. A table [SchemaV2] is also a [Struct] type.
 */
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -45,12 +45,12 @@ pub enum PrimitiveType {
     Uuid,
     /// Fixed length byte array
     Fixed(u64),
-    /// Arbitray-lenght byte array.
+    /// Arbitrary-length byte array.
     Binary,
 }
 
 /// Serialize for PrimitiveType wit special handling for
-/// Decimal and Fixedt types.
+/// Decimal and Fixed types.
 impl Serialize for PrimitiveType {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -190,7 +190,7 @@ pub struct StructField {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 /// Names and types of fields in a table.
-pub struct Schema {
+pub struct SchemaV2 {
     /// Identifier of the schema
     pub schema_id: i32,
     /// Set of primitive fields that identify rows in a table.
@@ -414,7 +414,7 @@ mod tests {
             }
         }
         "#;
-        let result_struct = serde_json::from_str::<Schema>(data).unwrap();
+        let result_struct = serde_json::from_str::<SchemaV2>(data).unwrap();
         assert_eq!(1, result_struct.schema_id);
         assert_eq!(None, result_struct.identifier_field_ids);
         assert_eq!(1, result_struct.struct_fields.fields.len());

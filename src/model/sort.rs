@@ -1,12 +1,16 @@
 /*!
-Definition of Sort orders for a Table.
+Definition of [Sort orders](https://iceberg.apache.org/spec/#sorting) for a Table.
+
+A [SortOrder] is composed of a list of [SortField] where each field has a [Transform],
+[SortDirection] and [NullOrder].
+
 */
 use crate::model::partition::Transform;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 /// Defines the sort order for a field.
-pub enum SortDirecion {
+pub enum SortDirection {
     /// Sort the field ascending.
     #[serde(rename = "asc")]
     Ascending,
@@ -35,7 +39,7 @@ pub struct SortField {
     /// A transform that is used to produce values to be sorted on from the source column.
     pub transform: Transform,
     /// A sort direction, that can only be either asc or desc
-    pub direction: SortDirecion,
+    pub direction: SortDirection,
     /// A null order that describes the order of null values when sorted.
     pub null_order: NullOrder,
 }
@@ -71,7 +75,7 @@ mod tests {
         let field: SortField = serde_json::from_str(&data).unwrap();
         assert_eq!(3, field.source_id);
         assert_eq!(Transform::Bucket(4), field.transform);
-        assert_eq!(SortDirecion::Descending, field.direction);
+        assert_eq!(SortDirection::Descending, field.direction);
         assert_eq!(NullOrder::Last, field.null_order);
     }
 

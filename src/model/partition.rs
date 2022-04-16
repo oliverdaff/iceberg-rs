@@ -1,6 +1,9 @@
 /*!
- Partition define how what the partition values are and how the are derived
+ [Partitions](https://iceberg.apache.org/spec/#partitioning) define what the partition values are and how the are derived
 from the source fields.
+
+The [PartitionSpec] is composed of multiple [PartitionField] each of which together define how
+the [TableMetadataV2](crate::model::table::TableMetadataV2) is partitioned.
 */
 use lazy_static::lazy_static;
 use regex::Regex;
