@@ -154,23 +154,21 @@ mod tests {
 
     #[test]
     fn test_retention_branch() {
-        let retention = Retention::Branch{
+        let retention = Retention::Branch {
             min_snapshots_to_keep: 1,
             max_snapshot_age_ms: 1,
-            max_ref_age_ms: 1
+            max_ref_age_ms: 1,
         };
         let json = serde_json::to_string(&retention).unwrap();
-        let result : Retention = serde_json::from_str(&json).unwrap();
-        assert!(matches!(result, Retention::Branch{..}))
+        let result: Retention = serde_json::from_str(&json).unwrap();
+        assert!(matches!(result, Retention::Branch { .. }))
     }
 
     #[test]
     fn test_retention_tag() {
-        let retention = Retention::Tag{
-            max_ref_age_ms: 1
-        };
+        let retention = Retention::Tag { max_ref_age_ms: 1 };
         let json = serde_json::to_string(&retention).unwrap();
-        let result : Retention = serde_json::from_str(&json).unwrap();
-        assert!(matches!(result, Retention::Tag{..}))
+        let result: Retention = serde_json::from_str(&json).unwrap();
+        assert!(matches!(result, Retention::Tag { .. }))
     }
 }
