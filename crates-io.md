@@ -81,16 +81,20 @@ Coming soon:
 ## Iceberg Model
 
 Diagram showing the main `nouns` of the Iceberg model.
-```mermaid
-erDiagram
-    TABLE ||--o{ PARTITION_SPEC : partitions
-    PARTITION_SPEC ||--o{ PARTITION_FIELD : fields
-    PARTITION_FIELD ||--|| TRANSFORM : transformed
-    TABLE ||--o{ SNAPSHOT : snapshots
-    TABLE ||--|{ SCHEMA : schemas
-    SCHEMA ||--o{ STRUCT_FIELD : fields
-    TABLE ||--o{ SORT_ORDER : fields
-    SORT_ORDER ||--o{ SORT_FIELD : fields
+```
+┌───────────────────────────────────┐         
+│Table                              │         
+└┬───────────────┬─────────┬───────┬┘         
+┌▽─────────────┐┌▽───────┐┌▽─────┐┌▽─────────┐
+│Partition Spec││Snapshot││Schema││Sort Order│
+└┬─────────────┘└────────┘└┬─────┘└┬─────────┘
+┌▽──────────────┐┌─────────▽──┐┌───▽──────┐   
+│Partition Field││Struct Field││Sort Field│   
+└┬──────────────┘└────────────┘└──────────┘   
+┌▽────────┐                                   
+│Transform│                                   
+└─────────┘                                   
+
 ```
 
 ## Contributing
