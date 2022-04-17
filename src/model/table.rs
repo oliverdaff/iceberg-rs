@@ -160,7 +160,8 @@ mod tests {
         "#;
         let metadata = serde_json::from_str::<TableMetadataV2>(&data)?;
         //test serialise deserialise works.
-        let metadata_two: TableMetadataV2 = serde_json::from_str(&serde_json::to_string(&metadata)?)?;
+        let metadata_two: TableMetadataV2 =
+            serde_json::from_str(&serde_json::to_string(&metadata)?)?;
         assert_eq!(metadata, metadata_two);
 
         Ok(())

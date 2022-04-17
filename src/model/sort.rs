@@ -8,7 +8,7 @@ A [SortOrder] is composed of a list of [SortField] where each field has a [Trans
 use crate::model::partition::Transform;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 /// Defines the sort order for a field.
 pub enum SortDirection {
     /// Sort the field ascending.
@@ -19,7 +19,7 @@ pub enum SortDirection {
     Descending,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 /// Defines the sort order for nulls in a field.
 pub enum NullOrder {
     #[serde(rename = "nulls-first")]
@@ -30,7 +30,7 @@ pub enum NullOrder {
     Last,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "kebab-case")]
 /// Definition of a how a field should be used within a sort.
 pub struct SortField {
@@ -60,6 +60,7 @@ pub struct SortOrder {
 mod tests {
 
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn test_sort_field() {
@@ -97,5 +98,75 @@ mod tests {
         let field: SortOrder = serde_json::from_str(&data).unwrap();
         assert_eq!(1, field.order_id);
         assert_eq!(1, field.fields.len());
+    }
+
+    fn sort_direction_strategy() -> impl Strategy<Value = SortDirection> {
+        prop_oneof![
+            Just(SortDirection::Ascending),
+            Just(SortDirection::Descending),
+        ]
+    }
+
+    fn null_order_strategy() -> impl Strategy<Value = NullOrder> {
+        prop_oneof![Just(NullOrder::First), Just(NullOrder::Last),]
+    }
+
+    fn sort_transform_strategy() -> impl Strategy<Value = Transform> {
+        prop_oneof![
+            Just(Transform::Void),
+            Just(Transform::Identity),
+            Just(Transform::Year),
+            Just(Transform::Month),
+            Just(Transform::Day),
+            Just(Transform::Hour),
+            any::<u32>().prop_map(Transform::Bucket),
+            any::<u32>().prop_map(Transform::Truncate)
+        ]
+    }
+
+    prop_compose! {
+        fn arb_sort_field()(source_id in any::<i32>(),
+                            transform in sort_transform_strategy(),
+                            direction in sort_direction_strategy(),
+                            null_order in null_order_strategy()) -> SortField{
+                                SortField{
+                                    source_id,transform, direction, null_order
+                                }
+                            }
+    }
+
+    prop_compose! {
+        fn arb_sort_order()(order_id in any::<i32>(),
+                            fields in prop::collection::vec(arb_sort_field(), 1..10)) -> SortOrder {
+                                SortOrder{order_id, fields}
+                            }
+    }
+
+    proptest! {
+       #[test]
+       fn test_sort_direction(a in sort_direction_strategy()) {
+           assert_eq!(a, serde_json::from_str(&serde_json::to_string(&a).unwrap()).unwrap())
+       }
+       #[test]
+       fn test_null_order(a in null_order_strategy()) {
+           assert_eq!(a, serde_json::from_str(&serde_json::to_string(&a).unwrap()).unwrap())
+       }
+       #[test]
+       fn test_transform(a in sort_transform_strategy()) {
+           assert_eq!(a, serde_json::from_str(&serde_json::to_string(&a).unwrap()).unwrap())
+       }
+
+       #[test]
+       fn prop_test_sort_field(a in arb_sort_field()) {
+           assert_eq!(a, serde_json::from_str(&serde_json::to_string(&a).unwrap()).unwrap())
+       }
+       #[test]
+       fn prop_test_sort_order(a in arb_sort_order()) {
+           assert_eq!(a, serde_json::from_str(&serde_json::to_string(&a).unwrap()).unwrap())
+       }
+
+
+
+
     }
 }
