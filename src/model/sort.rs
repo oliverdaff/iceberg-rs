@@ -162,7 +162,7 @@ mod tests {
        }
        #[test]
        fn prop_test_sort_order(a in arb_sort_order()) {
-           assert_eq!(a, serde_json::from_str(&serde_json::to_string(&a).unwrap()).unwrap())
+           assert_eq!(a, serde_json::from_str(&serde_json::to_string(&a).unwrap()).unwrap());
        }
 
 
