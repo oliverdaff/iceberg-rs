@@ -18,8 +18,8 @@ serde_json = "1.0"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 regex = "1.5.5"
 lazy_static = "1.4.0"
+anyhow = "1.0"
 
 
 [dev-dependencies]
-anyhow = "1.0"
 proptest = "1.0"
