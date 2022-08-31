@@ -2,6 +2,8 @@
 Defines traits to communicate with an iceberg catalog.
 */
 
+use std::collections::HashMap;
+
 use crate::error::Result;
 
 mod namespace;
@@ -49,4 +51,9 @@ pub trait Catalog: Send + Sync {
     ) -> Result<Table>;
     /// Instantiate a builder to either create a table or start a create/replace transaction.
     async fn build_table(identifier: TableIdentifier, schema: SchemaV2) -> Result<TableBuilder>;
+    /// Initialize a catalog given a custom name and a map of catalog properties.
+    /// A custom Catalog implementation must have a no-arg constructor. A compute engine like Spark
+    /// or Flink will first initialize the catalog without any arguments, and then call this method to
+    /// complete catalog initialization with properties passed into the engine.
+    async fn initialize(name: String, properties: HashMap<String, String>) -> Result<()>;
 }
