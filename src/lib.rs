@@ -18,5 +18,6 @@ Coming soon:
 
 */
 pub mod catalog;
+pub mod error;
 pub mod model;
 pub mod table;

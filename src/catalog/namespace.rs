@@ -2,7 +2,7 @@
 Defining the [Namespace] struct for handling namespaces in the catalog.
 */
 
-use anyhow::{anyhow, Result};
+use crate::error::{IcebergError, Result};
 pub struct Namespace {
     levels: Vec<String>,
 }
@@ -10,8 +10,8 @@ pub struct Namespace {
 impl Namespace {
     pub fn try_new(levels: &[String]) -> Result<Self> {
         if levels.iter().any(|x| x.is_empty()) {
-            Err(anyhow!(
-                "Error: Cannot create a namespace with an empty entry."
+            Err(IcebergError::Message(
+                "Error: Cannot create a namespace with an empty entry.".to_string(),
             ))
         } else {
             Ok(Namespace {

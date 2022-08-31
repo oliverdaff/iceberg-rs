@@ -3,7 +3,7 @@ Defining the [TableIdentifier] struct for identifying tables in an iceberg catal
 */
 
 use super::namespace::Namespace;
-use anyhow::{anyhow, Result};
+use crate::error::{IcebergError, Result};
 
 ///Identifies a table in an iceberg catalog.
 pub struct TableIdentifier {
@@ -16,11 +16,13 @@ impl TableIdentifier {
     pub fn try_new(names: &[String]) -> Result<Self> {
         let length = names.len();
         if names.is_empty() {
-            Err(anyhow!(
-                "Error: Cannot create a TableIdentifier from an empty sequence."
+            Err(IcebergError::Message(
+                "Error: Cannot create a TableIdentifier from an empty sequence.".to_string(),
             ))
         } else if names[length].is_empty() {
-            Err(anyhow!("Error: Table name cannot be empty."))
+            Err(IcebergError::Message(
+                "Error: Table name cannot be empty.".to_string(),
+            ))
         } else {
             Ok(TableIdentifier {
                 namespace: Namespace::try_new(&names[0..length - 1])?,
