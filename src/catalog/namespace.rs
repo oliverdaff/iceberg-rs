@@ -2,6 +2,9 @@
 Defining the [Namespace] struct for handling namespaces in the catalog.
 */
 
+use core::fmt::{self, Display};
+use itertools::Itertools;
+
 use crate::error::{IcebergError, Result};
 
 /// Namespace struct for iceberg catalogs
@@ -33,5 +36,19 @@ impl Namespace {
     /// Get the number of levels
     pub fn len(&self) -> usize {
         self.levels.len()
+    }
+}
+
+impl Display for Namespace {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            self.levels
+                .iter()
+                .map(|x| x as &str)
+                .intersperse(".")
+                .collect::<String>()
+        )
     }
 }
