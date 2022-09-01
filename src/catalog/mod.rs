@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 use crate::error::Result;
 
-mod namespace;
+pub mod namespace;
 pub mod table_builder;
 pub mod table_identifier;
 
