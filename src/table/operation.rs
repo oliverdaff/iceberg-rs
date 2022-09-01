@@ -2,12 +2,14 @@
  * Defines the different [Operation]s on a [Table].
 */
 
+use crate::model::schema::SchemaV2;
+
 ///Table operations
-pub enum TableOperation {
+pub enum Operation {
     /// Update schema
-    UpdateSchema,
+    UpdateSchema(SchemaV2),
     /// Update spec
-    UpdateSpec,
+    UpdateSpec(i32),
     /// Update table properties
     UpdateProperties,
     /// Replace the sort order
@@ -32,8 +34,6 @@ pub enum TableOperation {
     ExpireSnapshots,
     /// Manage snapshots in the table
     ManageSnapshots,
-    /// Commit multiple table operations at once
-    NewTransaction,
     /// Read and write table data and metadata files
     IO,
 }

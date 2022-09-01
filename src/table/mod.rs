@@ -2,18 +2,22 @@
 Defining the [Table] struct that represents an iceberg table.
 */
 
-use crate::model::table::TableMetadataV2;
+use crate::{catalog::Catalog, model::table::TableMetadataV2};
+
+use self::transaction::Transaction;
 
 mod operation;
 pub(crate) mod transaction;
 
 ///Iceberg table
 pub struct Table {
+    catalog: Box<dyn Catalog>,
     metadata: TableMetadataV2,
 }
 
-impl From<TableMetadataV2> for Table {
-    fn from(value: TableMetadataV2) -> Self {
-        Table { metadata: value }
+impl Table {
+    /// Create a new transaction for this table
+    pub fn new_transaction(&mut self) -> Transaction {
+        Transaction::new(self)
     }
 }
