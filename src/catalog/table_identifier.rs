@@ -2,6 +2,8 @@
 Defining the [TableIdentifier] struct for identifying tables in an iceberg catalog.
 */
 
+use core::fmt::{self, Display};
+
 use super::namespace::Namespace;
 use crate::error::{IcebergError, Result};
 
@@ -37,5 +39,11 @@ impl TableIdentifier {
             .map(|x| x.to_string())
             .collect::<Vec<String>>();
         TableIdentifier::try_new(&names)
+    }
+}
+
+impl Display for TableIdentifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}", self.namespace, self.name)
     }
 }
