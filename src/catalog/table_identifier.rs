@@ -40,6 +40,14 @@ impl TableIdentifier {
             .collect::<Vec<String>>();
         TableIdentifier::try_new(&names)
     }
+    /// Return namespace of table
+    pub fn namespace(&self) -> &Namespace {
+        &self.namespace
+    }
+    /// Return name of table
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 impl Display for TableIdentifier {
