@@ -80,7 +80,7 @@ impl TableBuilder {
     }
     /// Building a table writes the metadata file and commits the table to the catalog, TODO !!!!
     pub async fn commit(self) -> Result<Table> {
-        let object_store = self.catalog.object_store().await;
+        let object_store = self.catalog.object_store();
         let location = &self.metadata.location;
         let uuid = Uuid::new_v4();
         let version = &self.metadata.last_sequence_number;
