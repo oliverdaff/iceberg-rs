@@ -39,7 +39,7 @@ pub trait Catalog: Send + Sync {
         identifier: &TableIdentifier,
         metadata_file_location: &str,
     ) -> Result<Table>;
-    /// Register a table with the catalog if it doesn't exist.
+    /// Update a table by atomically changing the pointer to the metadata file
     async fn update_table(
         &self,
         identifier: &TableIdentifier,
