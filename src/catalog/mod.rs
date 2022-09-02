@@ -3,6 +3,7 @@ Defines traits to communicate with an iceberg catalog.
 */
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::error::Result;
 
@@ -11,6 +12,7 @@ pub mod table_builder;
 pub mod table_identifier;
 
 use crate::{model::schema::SchemaV2, table::Table};
+use object_store::ObjectStore;
 use table_identifier::TableIdentifier;
 
 use self::namespace::Namespace;
@@ -48,4 +50,6 @@ pub trait Catalog: Send + Sync {
     /// or Flink will first initialize the catalog without any arguments, and then call this method to
     /// complete catalog initialization with properties passed into the engine.
     async fn initialize(&mut self, name: &str, properties: HashMap<String, String>) -> Result<()>;
+    /// Return the associated object store to the catalog
+    async fn object_store(&self) -> Arc<dyn ObjectStore>;
 }

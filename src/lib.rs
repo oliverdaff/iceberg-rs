@@ -21,3 +21,5 @@ pub mod catalog;
 pub mod error;
 pub mod model;
 pub mod table;
+
+pub use object_store;

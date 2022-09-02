@@ -11,8 +11,8 @@ pub(crate) mod transaction;
 
 ///Iceberg table
 pub struct Table {
-    catalog: Box<dyn Catalog>,
-    metadata: TableMetadataV2,
+    pub(crate) catalog: Box<dyn Catalog>,
+    pub(crate) metadata: TableMetadataV2,
 }
 
 impl Table {

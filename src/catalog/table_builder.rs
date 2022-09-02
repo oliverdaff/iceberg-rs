@@ -1,24 +1,36 @@
 /*!
-Defining the [TableBuilder] trait for creating catalog tables and starting create/replace transactions
+Defining the [TableBuilder] struct for creating catalog tables and starting create/replace transactions
 */
 
 use std::time::SystemTime;
 
+use object_store::path::Path;
 use uuid::Uuid;
 
 use crate::error::{IcebergError, Result};
 use crate::model::partition::{PartitionField, Transform};
 use crate::model::sort::{NullOrder, SortDirection, SortField, SortOrder};
 use crate::model::{partition::PartitionSpec, schema::SchemaV2, table::TableMetadataV2};
+use crate::table::Table;
+
+use super::table_identifier::TableIdentifier;
+use super::Catalog;
 
 ///Builder pattern to create a table
 pub struct TableBuilder {
+    identifier: TableIdentifier,
+    catalog: Box<dyn Catalog>,
     metadata: TableMetadataV2,
 }
 
 impl TableBuilder {
     /// Creates a new [TableBuilder] with some default metadata entries already set.
-    pub fn new(location: String, schema: SchemaV2) -> Result<Self> {
+    pub fn new(
+        identifier: TableIdentifier,
+        location: String,
+        schema: SchemaV2,
+        catalog: Box<dyn Catalog>,
+    ) -> Result<Self> {
         let partition_spec = PartitionSpec {
             spec_id: 1,
             fields: vec![PartitionField {
@@ -60,7 +72,38 @@ impl TableBuilder {
             default_sort_order_id: 0,
             refs: None,
         };
-        Ok(TableBuilder { metadata: metadata })
+        Ok(TableBuilder {
+            identifier: identifier,
+            metadata: metadata,
+            catalog: catalog,
+        })
+    }
+    /// Building a table writes the metadata file and commits the table to the catalog, TODO !!!!
+    pub async fn commit(self) -> Result<Table> {
+        let object_store = self.catalog.object_store().await;
+        let location = &self.metadata.location;
+        let uuid = Uuid::new_v4();
+        let version = &self.metadata.last_sequence_number;
+        let metadata_json = serde_json::to_string(&self.metadata)
+            .map_err(|err| IcebergError::Message(err.to_string()))?;
+        let path: Path = (location.to_string()
+            + "/metadata/"
+            + &version.to_string()
+            + "-"
+            + &uuid.to_string()
+            + ".metadata.json")
+            .into();
+        object_store
+            .put(&path, metadata_json.into())
+            .await
+            .map_err(|err| IcebergError::Message(err.to_string()))?;
+        self.catalog
+            .register_table(self.identifier, &path.to_string())
+            .await?;
+        Ok(Table {
+            catalog: self.catalog,
+            metadata: self.metadata,
+        })
     }
     /// Sets a partition spec for the table.
     pub fn with_partition_spec(mut self, partition_spec: PartitionSpec) -> Self {
