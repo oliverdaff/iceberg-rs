@@ -21,7 +21,7 @@ impl TableIdentifier {
             Err(IcebergError::Message(
                 "Error: Cannot create a TableIdentifier from an empty sequence.".to_string(),
             ))
-        } else if names[length].is_empty() {
+        } else if names[length - 1].is_empty() {
             Err(IcebergError::Message(
                 "Error: Table name cannot be empty.".to_string(),
             ))
