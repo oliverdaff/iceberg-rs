@@ -28,7 +28,7 @@ impl TableIdentifier {
         } else {
             Ok(TableIdentifier {
                 namespace: Namespace::try_new(&names[0..length - 1])?,
-                name: names[length].clone(),
+                name: names[length - 1].clone(),
             })
         }
     }
