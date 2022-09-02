@@ -2,6 +2,7 @@
 Defining the [TableBuilder] struct for creating catalog tables and starting create/replace transactions
 */
 
+use std::sync::Arc;
 use std::time::SystemTime;
 
 use object_store::path::Path;
@@ -19,7 +20,7 @@ use super::Catalog;
 ///Builder pattern to create a table
 pub struct TableBuilder {
     identifier: TableIdentifier,
-    catalog: Box<dyn Catalog>,
+    catalog: Arc<dyn Catalog>,
     metadata: TableMetadataV2,
 }
 
@@ -29,7 +30,7 @@ impl TableBuilder {
         identifier: TableIdentifier,
         location: String,
         schema: SchemaV2,
-        catalog: Box<dyn Catalog>,
+        catalog: Arc<dyn Catalog>,
     ) -> Result<Self> {
         let partition_spec = PartitionSpec {
             spec_id: 1,

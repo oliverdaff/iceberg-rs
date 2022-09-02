@@ -2,6 +2,8 @@
 Defining the [Table] struct that represents an iceberg table.
 */
 
+use std::sync::Arc;
+
 use crate::{catalog::Catalog, model::table::TableMetadataV2};
 
 use self::transaction::Transaction;
@@ -11,7 +13,7 @@ pub(crate) mod transaction;
 
 ///Iceberg table
 pub struct Table {
-    pub(crate) catalog: Box<dyn Catalog>,
+    pub(crate) catalog: Arc<dyn Catalog>,
     pub(crate) metadata: TableMetadataV2,
 }
 
