@@ -29,7 +29,7 @@ pub trait Catalog: Send + Sync {
         schema: SchemaV2,
     ) -> Result<Table>;
     /// Check if a table exists
-    async fn table_exists(&self, identifier: &TableIdentifier) -> bool;
+    async fn table_exists(&self, identifier: &TableIdentifier) -> Result<bool>;
     /// Drop a table and delete all data and metadata files.
     async fn drop_table(&self, identifier: &TableIdentifier) -> Result<()>;
     /// Load a table.
