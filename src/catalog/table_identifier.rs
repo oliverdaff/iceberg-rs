@@ -8,6 +8,7 @@ use super::namespace::Namespace;
 use crate::error::{IcebergError, Result};
 
 ///Identifies a table in an iceberg catalog.
+#[derive(Clone)]
 pub struct TableIdentifier {
     namespace: Namespace,
     name: String,

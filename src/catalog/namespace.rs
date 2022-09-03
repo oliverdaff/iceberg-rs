@@ -8,6 +8,7 @@ use itertools::Itertools;
 use crate::error::{IcebergError, Result};
 
 /// Namespace struct for iceberg catalogs
+#[derive(Clone)]
 pub struct Namespace {
     levels: Vec<String>,
 }
