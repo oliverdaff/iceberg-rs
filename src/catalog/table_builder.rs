@@ -99,6 +99,7 @@ impl TableBuilder {
             .await
             .map_err(|err| IcebergError::Message(err.to_string()))?;
         self.catalog
+            .clone()
             .register_table(&self.identifier, &path.to_string())
             .await?;
         Ok(Table {

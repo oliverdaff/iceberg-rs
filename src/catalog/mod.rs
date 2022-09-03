@@ -24,31 +24,35 @@ pub trait Catalog: Send + Sync {
     /// Lists all tables in the given namespace.
     async fn list_tables(&self, namespace: &Namespace) -> Result<Vec<TableIdentifier>>;
     /// Create a table from an identifier and a schema
-    async fn create_table(&self, identifier: &TableIdentifier, schema: &SchemaV2) -> Result<Table>;
+    async fn create_table(
+        self: Arc<Self>,
+        identifier: &TableIdentifier,
+        schema: &SchemaV2,
+    ) -> Result<Table>;
     /// Check if a table exists
     async fn table_exists(&self, identifier: &TableIdentifier) -> bool;
     /// Drop a table and delete all data and metadata files.
     async fn drop_table(&self, identifier: &TableIdentifier) -> Result<()>;
     /// Load a table.
-    async fn load_table(&self, identifier: &TableIdentifier) -> Result<Table>;
+    async fn load_table(self: Arc<Self>, identifier: &TableIdentifier) -> Result<Table>;
     /// Invalidate cached table metadata from current catalog.
     async fn invalidate_table(&self, identifier: &TableIdentifier) -> Result<()>;
     /// Register a table with the catalog if it doesn't exist.
     async fn register_table(
-        &self,
+        self: Arc<Self>,
         identifier: &TableIdentifier,
         metadata_file_location: &str,
     ) -> Result<Table>;
     /// Update a table by atomically changing the pointer to the metadata file
     async fn update_table(
-        &self,
+        self: Arc<Self>,
         identifier: &TableIdentifier,
         metadata_file_location: &str,
         previous_metadata_file_location: &str,
     ) -> Result<Table>;
     /// Instantiate a builder to either create a table or start a create/replace transaction.
     async fn build_table(
-        &self,
+        self: Arc<Self>,
         identifier: &TableIdentifier,
         schema: &SchemaV2,
     ) -> Result<TableBuilder>;
