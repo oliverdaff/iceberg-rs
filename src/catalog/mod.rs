@@ -61,7 +61,7 @@ pub trait Catalog: Send + Sync {
     /// or Flink will first initialize the catalog without any arguments, and then call this method to
     /// complete catalog initialization with properties passed into the engine.
     async fn initialize(
-        self: Arc<Self>,
+        mut self: Arc<Self>,
         name: &str,
         properties: &HashMap<String, String>,
     ) -> Result<()>;
