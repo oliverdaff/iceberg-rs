@@ -13,11 +13,26 @@ pub(crate) mod transaction;
 
 ///Iceberg table
 pub struct Table {
-    pub(crate) catalog: Arc<dyn Catalog>,
-    pub(crate) metadata: TableMetadataV2,
+    catalog: Arc<dyn Catalog>,
+    metadata: TableMetadataV2,
 }
 
 impl Table {
+    /// Create a new Table
+    pub fn new(catalog: Arc<dyn Catalog>, metadata: TableMetadataV2) -> Self {
+        Table {
+            catalog: catalog,
+            metadata: metadata,
+        }
+    }
+    /// Get the catalog associated to the table
+    pub fn catalog(&self) -> &Arc<dyn Catalog> {
+        &self.catalog
+    }
+    /// Get the metadata of the table
+    pub fn metadata(&self) -> &TableMetadataV2 {
+        &self.metadata
+    }
     /// Create a new transaction for this table
     pub fn new_transaction(&mut self) -> Transaction {
         Transaction::new(self)

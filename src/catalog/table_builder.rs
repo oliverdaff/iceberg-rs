@@ -102,10 +102,7 @@ impl TableBuilder {
             .clone()
             .register_table(&self.identifier, &path.to_string())
             .await?;
-        Ok(Table {
-            catalog: self.catalog,
-            metadata: self.metadata,
-        })
+        Ok(Table::new(self.catalog, self.metadata))
     }
     /// Sets a partition spec for the table.
     pub fn with_partition_spec(mut self, partition_spec: PartitionSpec) -> Self {
