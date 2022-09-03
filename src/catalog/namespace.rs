@@ -45,11 +45,7 @@ impl Display for Namespace {
         write!(
             f,
             "{}",
-            self.levels
-                .iter()
-                .map(|x| x as &str)
-                .intersperse(".")
-                .collect::<String>()
+            Itertools::intersperse(self.levels.iter().map(|x| x as &str), ".").collect::<String>()
         )
     }
 }
