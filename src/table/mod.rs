@@ -9,6 +9,7 @@ use crate::{catalog::Catalog, model::table::TableMetadataV2};
 use self::transaction::Transaction;
 
 mod operation;
+pub mod table_builder;
 pub(crate) mod transaction;
 
 ///Iceberg table

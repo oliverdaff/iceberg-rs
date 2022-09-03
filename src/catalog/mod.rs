@@ -8,15 +8,14 @@ use std::sync::Arc;
 use crate::error::Result;
 
 pub mod namespace;
-pub mod table_builder;
 pub mod table_identifier;
 
+use crate::table::table_builder::TableBuilder;
 use crate::{model::schema::SchemaV2, table::Table};
 use object_store::ObjectStore;
 use table_identifier::TableIdentifier;
 
 use self::namespace::Namespace;
-use self::table_builder::TableBuilder;
 
 /// Trait to create, replace and drop tables in an iceberg catalog.
 #[async_trait::async_trait]
@@ -26,8 +25,8 @@ pub trait Catalog: Send + Sync {
     /// Create a table from an identifier and a schema
     async fn create_table(
         self: Arc<Self>,
-        identifier: &TableIdentifier,
-        schema: &SchemaV2,
+        identifier: TableIdentifier,
+        schema: SchemaV2,
     ) -> Result<Table>;
     /// Check if a table exists
     async fn table_exists(&self, identifier: &TableIdentifier) -> bool;
@@ -53,8 +52,8 @@ pub trait Catalog: Send + Sync {
     /// Instantiate a builder to either create a table or start a create/replace transaction.
     async fn build_table(
         self: Arc<Self>,
-        identifier: &TableIdentifier,
-        schema: &SchemaV2,
+        identifier: TableIdentifier,
+        schema: SchemaV2,
     ) -> Result<TableBuilder>;
     /// Initialize a catalog given a custom name and a map of catalog properties.
     /// A custom Catalog implementation must have a no-arg constructor. A compute engine like Spark

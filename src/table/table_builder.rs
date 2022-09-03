@@ -8,13 +8,13 @@ use std::time::SystemTime;
 use object_store::path::Path;
 use uuid::Uuid;
 
+use crate::catalog::table_identifier::TableIdentifier;
 use crate::error::{IcebergError, Result};
 use crate::model::partition::{PartitionField, Transform};
 use crate::model::sort::{NullOrder, SortDirection, SortField, SortOrder};
 use crate::model::{partition::PartitionSpec, schema::SchemaV2, table::TableMetadataV2};
 use crate::table::Table;
 
-use super::table_identifier::TableIdentifier;
 use super::Catalog;
 
 ///Builder pattern to create a table
