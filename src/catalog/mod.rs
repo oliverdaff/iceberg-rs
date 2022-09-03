@@ -60,7 +60,11 @@ pub trait Catalog: Send + Sync {
     /// A custom Catalog implementation must have a no-arg constructor. A compute engine like Spark
     /// or Flink will first initialize the catalog without any arguments, and then call this method to
     /// complete catalog initialization with properties passed into the engine.
-    async fn initialize(&mut self, name: &str, properties: &HashMap<String, String>) -> Result<()>;
+    async fn initialize(
+        self: Arc<Self>,
+        name: &str,
+        properties: &HashMap<String, String>,
+    ) -> Result<()>;
     /// Return the associated object store to the catalog
     fn object_store(&self) -> Arc<dyn ObjectStore>;
 }
