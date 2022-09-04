@@ -52,7 +52,7 @@ impl TableBuilder {
         };
         let metadata = TableMetadataV2 {
             table_uuid: Uuid::new_v4(),
-            location: location,
+            location,
             last_sequence_number: 0,
             last_updated_ms: SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
@@ -74,9 +74,9 @@ impl TableBuilder {
             refs: None,
         };
         Ok(TableBuilder {
-            identifier: identifier,
-            metadata: metadata,
-            catalog: catalog,
+            identifier,
+            metadata,
+            catalog,
         })
     }
     /// Building a table writes the metadata file and commits the table to the catalog, TODO !!!!
@@ -100,9 +100,14 @@ impl TableBuilder {
             .map_err(|err| IcebergError::Message(err.to_string()))?;
         self.catalog
             .clone()
-            .register_table(&self.identifier, &path.to_string())
+            .register_table(&self.identifier, path.as_ref())
             .await?;
-        Ok(Table::new(self.catalog, self.metadata, &path.to_string()))
+        Ok(Table::new(
+            self.identifier,
+            self.catalog,
+            self.metadata,
+            path.as_ref(),
+        ))
     }
     /// Sets a partition spec for the table.
     pub fn with_partition_spec(mut self, partition_spec: PartitionSpec) -> Self {

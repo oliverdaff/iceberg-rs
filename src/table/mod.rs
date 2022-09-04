@@ -4,16 +4,20 @@ Defining the [Table] struct that represents an iceberg table.
 
 use std::sync::Arc;
 
-use crate::{catalog::Catalog, model::table::TableMetadataV2};
+use crate::{
+    catalog::{table_identifier::TableIdentifier, Catalog},
+    model::table::TableMetadataV2,
+};
 
 use self::transaction::Transaction;
 
 mod operation;
 pub mod table_builder;
-pub(crate) mod transaction;
+pub mod transaction;
 
 ///Iceberg table
 pub struct Table {
+    identifier: TableIdentifier,
     catalog: Arc<dyn Catalog>,
     metadata: TableMetadataV2,
     metadata_location: String,
@@ -22,15 +26,21 @@ pub struct Table {
 impl Table {
     /// Create a new Table
     pub fn new(
+        identifier: TableIdentifier,
         catalog: Arc<dyn Catalog>,
         metadata: TableMetadataV2,
         metadata_location: &str,
     ) -> Self {
         Table {
-            catalog: catalog,
-            metadata: metadata,
+            identifier,
+            catalog,
+            metadata,
             metadata_location: metadata_location.to_string(),
         }
+    }
+    /// Get the identifier of the table
+    pub fn identifier(&self) -> &TableIdentifier {
+        &self.identifier
     }
     /// Get the catalog associated to the table
     pub fn catalog(&self) -> &Arc<dyn Catalog> {
