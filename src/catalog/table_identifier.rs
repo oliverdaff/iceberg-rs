@@ -7,6 +7,9 @@ use core::fmt::{self, Display};
 use super::namespace::Namespace;
 use crate::error::{IcebergError, Result};
 
+/// Seperator of different namespace levels.
+pub static SEPARATOR: &str = ".";
+
 ///Identifies a table in an iceberg catalog.
 #[derive(Clone)]
 pub struct TableIdentifier {
@@ -36,7 +39,7 @@ impl TableIdentifier {
     ///Parse
     pub fn parse(identifier: &str) -> Result<Self> {
         let names = identifier
-            .split('.')
+            .split(SEPARATOR)
             .map(|x| x.to_string())
             .collect::<Vec<String>>();
         TableIdentifier::try_new(&names)
@@ -53,6 +56,6 @@ impl TableIdentifier {
 
 impl Display for TableIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}", self.namespace, self.name)
+        write!(f, "{}{}{}", self.namespace, SEPARATOR, self.name)
     }
 }

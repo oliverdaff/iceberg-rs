@@ -5,7 +5,10 @@ Defining the [Namespace] struct for handling namespaces in the catalog.
 use core::fmt::{self, Display};
 use itertools::Itertools;
 
-use crate::error::{IcebergError, Result};
+use crate::{
+    catalog::table_identifier::SEPARATOR,
+    error::{IcebergError, Result},
+};
 
 /// Namespace struct for iceberg catalogs
 #[derive(Clone)]
@@ -49,7 +52,8 @@ impl Display for Namespace {
         write!(
             f,
             "{}",
-            Itertools::intersperse(self.levels.iter().map(|x| x as &str), ".").collect::<String>()
+            Itertools::intersperse(self.levels.iter().map(|x| x as &str), SEPARATOR)
+                .collect::<String>()
         )
     }
 }
