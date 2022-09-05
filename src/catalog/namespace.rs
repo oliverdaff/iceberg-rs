@@ -56,3 +56,25 @@ impl Display for Namespace {
         )
     }
 }
+
+#[cfg(test)]
+
+mod tests {
+    use super::Namespace;
+
+    #[test]
+    fn test_new() {
+        let namespace = Namespace::try_new(&vec![
+            "level1".to_string(),
+            "level2".to_string(),
+            "level3".to_string(),
+        ])
+        .unwrap();
+        assert_eq!(&format!("{}", namespace), "level1.level2.level3");
+    }
+    #[test]
+    #[should_panic]
+    fn test_empty() {
+        let _ = Namespace::try_new(&vec!["".to_string(), "level2".to_string()]).unwrap();
+    }
+}
