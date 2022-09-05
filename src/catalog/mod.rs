@@ -33,7 +33,7 @@ pub trait Catalog: Send + Sync {
     /// Drop a table and delete all data and metadata files.
     async fn drop_table(&self, identifier: &TableIdentifier) -> Result<()>;
     /// Load a table.
-    async fn load_table(self: Arc<Self>, identifier: &TableIdentifier) -> Result<Table>;
+    async fn load_table(self: Arc<Self>, identifier: TableIdentifier) -> Result<Table>;
     /// Invalidate cached table metadata from current catalog.
     async fn invalidate_table(&self, identifier: &TableIdentifier) -> Result<()>;
     /// Register a table with the catalog if it doesn't exist.
