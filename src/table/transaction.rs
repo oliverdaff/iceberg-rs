@@ -40,35 +40,69 @@ impl<'table> Transaction<'table> {
             op.execute(table);
             table
         });
-        let object_store = table.catalog.object_store();
-        let identifier = table.identifier();
-        let location = &table.metadata.location;
-        let transaction_uuid = Uuid::new_v4();
-        let version = &table.metadata.last_sequence_number;
-        let metadata_json =
-            serde_json::to_string(&table.metadata).map_err(|err| anyhow!(err.to_string()))?;
-        let metadata_file_location: Path = (location.to_string()
-            + "/metadata/"
-            + &version.to_string()
-            + "-"
-            + &transaction_uuid.to_string()
-            + ".metadata.json")
-            .into();
-        object_store
-            .put(&metadata_file_location, metadata_json.into())
-            .await
-            .map_err(|err| anyhow!(err.to_string()))?;
-        let previous_metadata_file_location = table.metadata_location();
-        let new_table = table
-            .catalog
-            .clone()
-            .update_table(
-                identifier.clone(),
-                metadata_file_location.as_ref(),
-                previous_metadata_file_location,
-            )
-            .await?;
-        *table = new_table;
-        Ok(())
+        match (table.catalog(), table.identifier(), table.object_store()) {
+            (Some(catalog), Some(identifier), _) => {
+                let object_store = catalog.object_store();
+                let location = &table.metadata.location;
+                let transaction_uuid = Uuid::new_v4();
+                let version = &table.metadata.last_sequence_number;
+                let metadata_json = serde_json::to_string(&table.metadata)
+                    .map_err(|err| anyhow!(err.to_string()))?;
+                let metadata_file_location: Path = (location.to_string()
+                    + "/metadata/"
+                    + &version.to_string()
+                    + "-"
+                    + &transaction_uuid.to_string()
+                    + ".metadata.json")
+                    .into();
+                object_store
+                    .put(&metadata_file_location, metadata_json.into())
+                    .await
+                    .map_err(|err| anyhow!(err.to_string()))?;
+                let previous_metadata_file_location = table.metadata_location();
+                let new_table = catalog
+                    .clone()
+                    .update_table(
+                        identifier.clone(),
+                        metadata_file_location.as_ref(),
+                        previous_metadata_file_location,
+                    )
+                    .await?;
+                *table = new_table;
+                Ok(())
+            }
+            (_, _, Some(object_store)) => {
+                let location = &table.metadata.location;
+                let uuid = Uuid::new_v4();
+                let version = &table.metadata.last_sequence_number;
+                let metadata_json = serde_json::to_string(&table.metadata)
+                    .map_err(|err| anyhow!(err.to_string()))?;
+                let temp_path: Path =
+                    (location.to_string() + "/metadata/" + &uuid.to_string() + ".metadata.json")
+                        .into();
+                let final_path: Path = (location.to_string()
+                    + "/metadata/v"
+                    + &version.to_string()
+                    + ".metadata.json")
+                    .into();
+                object_store
+                    .put(&temp_path, metadata_json.into())
+                    .await
+                    .map_err(|err| anyhow!(err.to_string()))?;
+                object_store
+                    .copy_if_not_exists(&temp_path, &final_path)
+                    .await
+                    .map_err(|err| anyhow!(err.to_string()))?;
+                object_store
+                    .delete(&temp_path)
+                    .await
+                    .map_err(|err| anyhow!(err.to_string()))?;
+                *table = new_table;
+                Ok(())
+            }
+            (_, _, _) => Err(anyhow!(
+                "Table can't be both a filesystem and a metastore table."
+            )),
+        }
     }
 }
