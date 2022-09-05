@@ -32,7 +32,7 @@ pub struct Table {
 }
 
 impl Table {
-    /// Create a new Table
+    /// Create a new metastore Table
     pub fn new_metastore_table(
         identifier: TableIdentifier,
         catalog: Arc<dyn Catalog>,
@@ -84,7 +84,7 @@ impl Table {
                 }
             })
             .await?;
-        let metadata_location = path.to_string() + "v" + &version.to_string() + ".metadata.json";
+        let metadata_location = path.to_string() + "/v" + &version.to_string() + ".metadata.json";
         let bytes = &object_store
             .get(&metadata_location.clone().into())
             .await
@@ -134,5 +134,66 @@ impl Table {
     /// Create a new transaction for this table
     pub fn new_transaction(&mut self) -> Transaction {
         Transaction::new(self)
+    }
+}
+
+impl Table {
+    pub(crate) fn increment_sequence_number(&mut self) {
+        self.metadata.last_sequence_number += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::sync::Arc;
+
+    use object_store::{memory::InMemory, ObjectStore};
+
+    use crate::{
+        model::schema::{AllType, PrimitiveType, SchemaV2, Struct, StructField},
+        table::table_builder::TableBuilder,
+    };
+
+    #[tokio::test]
+    async fn test_increment_sequence_number() {
+        let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
+        let schema = SchemaV2 {
+            schema_id: 1,
+            identifier_field_ids: Some(vec![1, 2]),
+            name_mapping: None,
+            struct_fields: Struct {
+                fields: vec![
+                    StructField {
+                        id: 1,
+                        name: "one".to_string(),
+                        required: false,
+                        field_type: AllType::Primitive(PrimitiveType::String),
+                        doc: None,
+                    },
+                    StructField {
+                        id: 2,
+                        name: "two".to_string(),
+                        required: false,
+                        field_type: AllType::Primitive(PrimitiveType::String),
+                        doc: None,
+                    },
+                ],
+            },
+        };
+        let mut table =
+            TableBuilder::new_filesystem_table("test/table1", schema, Arc::clone(&object_store))
+                .unwrap()
+                .commit()
+                .await
+                .unwrap();
+
+        let metadata_location = table.metadata_location();
+        assert_eq!(metadata_location, "test/table1/metadata/v0.metadata.json");
+
+        let transaction = table.new_transaction();
+        transaction.commit().await.unwrap();
+        let metadata_location = table.metadata_location();
+        assert_eq!(metadata_location, "test/table1/metadata/v1.metadata.json");
     }
 }

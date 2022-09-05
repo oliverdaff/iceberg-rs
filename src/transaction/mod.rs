@@ -21,6 +21,7 @@ pub struct Transaction<'table> {
 impl<'table> Transaction<'table> {
     /// Create a transaction for the given table.
     pub fn new(table: &'table mut Table) -> Self {
+        table.increment_sequence_number();
         Transaction {
             table,
             operations: vec![],

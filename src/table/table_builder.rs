@@ -27,7 +27,7 @@ pub struct TableBuilder {
 impl TableBuilder {
     /// Creates a new [TableBuilder] to create a Metastore Table with some default metadata entries already set.
     pub fn new_metastore_table(
-        location: String,
+        location: &str,
         schema: SchemaV2,
         identifier: TableIdentifier,
         catalog: Arc<dyn Catalog>,
@@ -52,7 +52,7 @@ impl TableBuilder {
         };
         let metadata = TableMetadataV2 {
             table_uuid: Uuid::new_v4(),
-            location,
+            location: location.to_string(),
             last_sequence_number: 0,
             last_updated_ms: SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
@@ -80,7 +80,7 @@ impl TableBuilder {
     }
     /// Creates a new [TableBuilder] to create a FileSystem Table with some default metadata entries already set.
     pub fn new_filesystem_table(
-        location: String,
+        location: &str,
         schema: SchemaV2,
         object_store: Arc<dyn ObjectStore>,
     ) -> Result<Self> {
@@ -104,7 +104,7 @@ impl TableBuilder {
         };
         let metadata = TableMetadataV2 {
             table_uuid: Uuid::new_v4(),
-            location,
+            location: location.to_string(),
             last_sequence_number: 0,
             last_updated_ms: SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
