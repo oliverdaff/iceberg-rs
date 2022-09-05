@@ -5,7 +5,7 @@ Defines traits to communicate with an iceberg catalog.
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::error::Result;
+use anyhow::Result;
 
 pub mod namespace;
 pub mod table_identifier;

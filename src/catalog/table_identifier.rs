@@ -5,7 +5,7 @@ Defining the [TableIdentifier] struct for identifying tables in an iceberg catal
 use core::fmt::{self, Display};
 
 use super::namespace::Namespace;
-use crate::error::{IcebergError, Result};
+use anyhow::{anyhow, Result};
 
 /// Seperator of different namespace levels.
 pub static SEPARATOR: &str = ".";
@@ -22,13 +22,11 @@ impl TableIdentifier {
     pub fn try_new(names: &[String]) -> Result<Self> {
         let length = names.len();
         if names.is_empty() {
-            Err(IcebergError::Message(
-                "Error: Cannot create a TableIdentifier from an empty sequence.".to_string(),
+            Err(anyhow!(
+                "Error: Cannot create a TableIdentifier from an empty sequence.",
             ))
         } else if names[length - 1].is_empty() {
-            Err(IcebergError::Message(
-                "Error: Table name cannot be empty.".to_string(),
-            ))
+            Err(anyhow!("Error: Table name cannot be empty.",))
         } else {
             Ok(TableIdentifier {
                 namespace: Namespace::try_new(&names[0..length - 1])?,

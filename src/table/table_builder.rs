@@ -9,11 +9,11 @@ use object_store::path::Path;
 use uuid::Uuid;
 
 use crate::catalog::table_identifier::TableIdentifier;
-use crate::error::{IcebergError, Result};
 use crate::model::partition::{PartitionField, Transform};
 use crate::model::sort::{NullOrder, SortDirection, SortField, SortOrder};
 use crate::model::{partition::PartitionSpec, schema::SchemaV2, table::TableMetadataV2};
 use crate::table::Table;
+use anyhow::{anyhow, Result};
 
 use super::Catalog;
 
@@ -56,7 +56,7 @@ impl TableBuilder {
             last_sequence_number: 0,
             last_updated_ms: SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
-                .map_err(|err| IcebergError::Message(err.to_string()))?
+                .map_err(|err| anyhow!(err.to_string()))?
                 .as_millis() as i64,
             last_column_id: schema.struct_fields.fields.len() as i32,
             schemas: vec![schema],
@@ -85,8 +85,8 @@ impl TableBuilder {
         let location = &self.metadata.location;
         let uuid = Uuid::new_v4();
         let version = &self.metadata.last_sequence_number;
-        let metadata_json = serde_json::to_string(&self.metadata)
-            .map_err(|err| IcebergError::Message(err.to_string()))?;
+        let metadata_json =
+            serde_json::to_string(&self.metadata).map_err(|err| anyhow!(err.to_string()))?;
         let path: Path = (location.to_string()
             + "/metadata/"
             + &version.to_string()
@@ -97,7 +97,7 @@ impl TableBuilder {
         object_store
             .put(&path, metadata_json.into())
             .await
-            .map_err(|err| IcebergError::Message(err.to_string()))?;
+            .map_err(|err| anyhow!(err.to_string()))?;
         self.catalog
             .clone()
             .register_table(&self.identifier, path.as_ref())

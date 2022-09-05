@@ -5,7 +5,8 @@
 use object_store::path::Path;
 use uuid::Uuid;
 
-use crate::{error::IcebergError, error::Result, model::schema::SchemaV2};
+use crate::model::schema::SchemaV2;
+use anyhow::{anyhow, Result};
 
 use super::{operation::Operation, Table};
 
@@ -44,8 +45,8 @@ impl<'table> Transaction<'table> {
         let location = &table.metadata.location;
         let transaction_uuid = Uuid::new_v4();
         let version = &table.metadata.last_sequence_number;
-        let metadata_json = serde_json::to_string(&table.metadata)
-            .map_err(|err| IcebergError::Message(err.to_string()))?;
+        let metadata_json =
+            serde_json::to_string(&table.metadata).map_err(|err| anyhow!(err.to_string()))?;
         let metadata_file_location: Path = (location.to_string()
             + "/metadata/"
             + &version.to_string()
@@ -56,7 +57,7 @@ impl<'table> Transaction<'table> {
         object_store
             .put(&metadata_file_location, metadata_json.into())
             .await
-            .map_err(|err| IcebergError::Message(err.to_string()))?;
+            .map_err(|err| anyhow!(err.to_string()))?;
         let previous_metadata_file_location = table.metadata_location();
         let new_table = table
             .catalog
