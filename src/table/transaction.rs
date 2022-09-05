@@ -63,7 +63,7 @@ impl<'table> Transaction<'table> {
             .catalog
             .clone()
             .update_table(
-                identifier,
+                identifier.clone(),
                 metadata_file_location.as_ref(),
                 previous_metadata_file_location,
             )

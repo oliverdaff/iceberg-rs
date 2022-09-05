@@ -98,16 +98,12 @@ impl TableBuilder {
             .put(&path, metadata_json.into())
             .await
             .map_err(|err| anyhow!(err.to_string()))?;
-        self.catalog
+        let table = self
+            .catalog
             .clone()
-            .register_table(&self.identifier, path.as_ref())
+            .register_table(self.identifier, path.as_ref())
             .await?;
-        Ok(Table::new(
-            self.identifier,
-            self.catalog,
-            self.metadata,
-            path.as_ref(),
-        ))
+        Ok(table)
     }
     /// Sets a partition spec for the table.
     pub fn with_partition_spec(mut self, partition_spec: PartitionSpec) -> Self {
