@@ -31,6 +31,7 @@ pub struct Table {
     metadata_location: String,
 }
 
+/// Public interface of the table.
 impl Table {
     /// Create a new metastore Table
     pub fn new_metastore_table(
@@ -102,14 +103,14 @@ impl Table {
             metadata_location,
         })
     }
-    /// Get the identifier of the table
+    /// Get the table identifier in the catalog. Returns None of it is a filesystem table.
     pub fn identifier(&self) -> Option<&TableIdentifier> {
         match &self.table_type {
             TableType::FileSystem(_) => None,
             TableType::Metastore(identifier, _) => Some(identifier),
         }
     }
-    /// Get the catalog associated to the table, returns None if the table is a filesystem table
+    /// Get the catalog associated to the table. Returns None if the table is a filesystem table
     pub fn catalog(&self) -> Option<&Arc<dyn Catalog>> {
         match &self.table_type {
             TableType::FileSystem(_) => None,
@@ -137,6 +138,7 @@ impl Table {
     }
 }
 
+/// Private interface of the table.
 impl Table {
     pub(crate) fn increment_sequence_number(&mut self) {
         self.metadata.last_sequence_number += 1;
