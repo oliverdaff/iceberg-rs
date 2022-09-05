@@ -5,10 +5,12 @@
 use object_store::path::Path;
 use uuid::Uuid;
 
-use crate::model::schema::SchemaV2;
+use crate::{model::schema::SchemaV2, table::Table};
 use anyhow::{anyhow, Result};
 
-use super::{operation::Operation, Table};
+use self::operation::Operation;
+
+mod operation;
 
 /// Transactions let you perform a sequence of [Operation]s that can be committed to be performed with ACID guarantees.
 pub struct Transaction<'table> {
@@ -43,10 +45,10 @@ impl<'table> Transaction<'table> {
         match (table.catalog(), table.identifier(), table.object_store()) {
             (Some(catalog), Some(identifier), _) => {
                 let object_store = catalog.object_store();
-                let location = &table.metadata.location;
+                let location = &table.metadata().location;
                 let transaction_uuid = Uuid::new_v4();
-                let version = &table.metadata.last_sequence_number;
-                let metadata_json = serde_json::to_string(&table.metadata)
+                let version = &table.metadata().last_sequence_number;
+                let metadata_json = serde_json::to_string(&table.metadata())
                     .map_err(|err| anyhow!(err.to_string()))?;
                 let metadata_file_location: Path = (location.to_string()
                     + "/metadata/"
@@ -72,10 +74,10 @@ impl<'table> Transaction<'table> {
                 Ok(())
             }
             (_, _, Some(object_store)) => {
-                let location = &table.metadata.location;
+                let location = &table.metadata().location;
                 let uuid = Uuid::new_v4();
-                let version = &table.metadata.last_sequence_number;
-                let metadata_json = serde_json::to_string(&table.metadata)
+                let version = &table.metadata().last_sequence_number;
+                let metadata_json = serde_json::to_string(&table.metadata())
                     .map_err(|err| anyhow!(err.to_string()))?;
                 let temp_path: Path =
                     (location.to_string() + "/metadata/" + &uuid.to_string() + ".metadata.json")

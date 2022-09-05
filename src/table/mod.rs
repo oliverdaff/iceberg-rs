@@ -11,13 +11,10 @@ use object_store::{path::Path, ObjectStore};
 use crate::{
     catalog::{table_identifier::TableIdentifier, Catalog},
     model::table::TableMetadataV2,
+    transaction::Transaction,
 };
 
-use self::transaction::Transaction;
-
-mod operation;
 pub mod table_builder;
-pub mod transaction;
 
 /// Tables can be either one of following types:
 /// - FileSystem(https://iceberg.apache.org/spec/#file-system-tables)

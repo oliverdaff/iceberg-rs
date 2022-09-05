@@ -2,9 +2,7 @@
  * Defines the different [Operation]s on a [Table].
 */
 
-use crate::model::schema::SchemaV2;
-
-use super::Table;
+use crate::{model::schema::SchemaV2, table::Table};
 
 ///Table operations
 pub enum Operation {
