@@ -57,3 +57,40 @@ impl Display for TableIdentifier {
         write!(f, "{}{}{}", self.namespace, SEPARATOR, self.name)
     }
 }
+
+#[cfg(test)]
+
+mod tests {
+    use super::TableIdentifier;
+
+    #[test]
+    fn test_new() {
+        let identifier = TableIdentifier::try_new(&vec![
+            "level1".to_string(),
+            "level2".to_string(),
+            "table".to_string(),
+        ])
+        .unwrap();
+        assert_eq!(&format!("{}", identifier), "level1.level2.table");
+    }
+    #[test]
+    #[should_panic]
+    fn test_empty() {
+        let _ = TableIdentifier::try_new(&vec![
+            "level1".to_string(),
+            "level2".to_string(),
+            "".to_string(),
+        ])
+        .unwrap();
+    }
+    #[test]
+    #[should_panic]
+    fn test_empty_identifier() {
+        let _ = TableIdentifier::try_new(&vec![]).unwrap();
+    }
+    #[test]
+    fn test_parse() {
+        let identifier = TableIdentifier::parse("level1.level2.table").unwrap();
+        assert_eq!(&format!("{}", identifier), "level1.level2.table");
+    }
+}
