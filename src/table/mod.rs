@@ -63,11 +63,11 @@ impl Table {
                             .location
                             .parts()
                             .last()
-                            .ok_or(anyhow!("Metadata location path is empty."))?;
+                            .ok_or_else(|| anyhow!("Metadata location path is empty."))?;
                         if name.as_ref().ends_with(".metadata.json") {
                             let version: i64 = name
                                 .as_ref()
-                                .trim_start_matches("v")
+                                .trim_start_matches('v')
                                 .trim_end_matches(".metadata.json")
                                 .parse()?;
                             if version > acc {
