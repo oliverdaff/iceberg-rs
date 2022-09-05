@@ -180,6 +180,7 @@ impl TableBuilder {
                     .delete(&temp_path)
                     .await
                     .map_err(|err| anyhow!(err.to_string()))?;
+                let table = Table::load_file_system_table(location, &object_store).await?;
                 Ok(table)
             }
         }

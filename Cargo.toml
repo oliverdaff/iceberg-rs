@@ -22,6 +22,7 @@ anyhow = "1.0"
 async-trait = "0.1.57"
 itertools = "0.10.3"
 object_store = "0.4.0"
+futures = "0.3.24"
 
 
 [dev-dependencies]
