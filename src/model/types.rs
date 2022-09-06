@@ -4,9 +4,7 @@
 
 use std::collections::HashMap;
 
-use self::decimal::Decimal;
-
-pub mod decimal;
+use super::decimal::Decimal;
 
 /// Values present in iceberg type
 pub enum Value {
