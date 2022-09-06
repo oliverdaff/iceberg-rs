@@ -190,7 +190,7 @@ fn read_manifest_entry<R: std::io::Read>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apache_avro;
+    use apache_avro::{self, types::Value};
     use proptest::prelude::*;
 
     fn status_strategy() -> impl Strategy<Value = Status> {
@@ -266,12 +266,12 @@ mod tests {
 
             let meta: std::collections::HashMap<String, apache_avro::types::Value> =
                 std::collections::HashMap::from_iter(vec![
-                    ("schema".to_string(), table_schema.into()),
-                    ("schema-id".to_string(), table_schema_id.into()),
-                    ("partition-spec".to_string(), partition_spec.into()),
-                    ("partition-spec-id".to_string(), partition_spec_id.into()),
-                    ("format-version".to_string(), format_version.into()),
-                    ("content".to_string(), content.into())
+                    ("schema".to_string(), Value::Bytes(table_schema.into())),
+                    ("schema-id".to_string(), Value::Bytes(table_schema_id.into())),
+                    ("partition-spec".to_string(), Value::Bytes(partition_spec.into())),
+                    ("partition-spec-id".to_string(), Value::Bytes(partition_spec_id.into())),
+                    ("format-version".to_string(), Value::Bytes(format_version.into())),
+                    ("content".to_string(), Value::Bytes(content.into()))
                     ],
                 );
             let mut writer = apache_avro::Writer::builder()
