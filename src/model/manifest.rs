@@ -125,7 +125,7 @@ pub struct DataFile {
 
 /// Read a manifest
 pub fn read_manifest<R: std::io::Read>(r: R) -> Result<Manifest> {
-    let mut reader = avro_rs::Reader::new(r)?;
+    let mut reader = apache_avro::Reader::new(r)?;
 
     let metadata = read_metadata(&reader)?;
     let entry = read_manifest_entry(&mut reader)?;
@@ -133,18 +133,12 @@ pub fn read_manifest<R: std::io::Read>(r: R) -> Result<Manifest> {
 }
 
 /// Read metadata from the avro reader
-fn read_metadata<R: std::io::Read>(reader: &avro_rs::Reader<R>) -> Result<Metadata> {
+fn read_metadata<R: std::io::Read>(reader: &apache_avro::Reader<R>) -> Result<Metadata> {
     let read_string = |key: &str| {
         reader
-            .writer_metadata()
+            .user_metadata()
             .get(key)
-            .map(|id| {
-                if let avro_rs::types::Value::Bytes(bytes) = id {
-                    String::from_utf8(bytes.to_vec()).map_err(anyhow::Error::from)
-                } else {
-                    anyhow::bail!("Error expected Bytes for key: {key}")
-                }
-            })
+            .map(|id| String::from_utf8(id.to_vec()).map_err(anyhow::Error::from))
             .transpose()
     };
 
@@ -164,24 +158,27 @@ fn read_metadata<R: std::io::Read>(reader: &avro_rs::Reader<R>) -> Result<Metada
     })
 }
 
-fn read_manifest_entry<R: std::io::Read>(reader: &mut avro_rs::Reader<R>) -> Result<ManifestEntry> {
+fn read_manifest_entry<R: std::io::Read>(
+    reader: &mut apache_avro::Reader<R>,
+) -> Result<ManifestEntry> {
     let record = reader
         .into_iter()
         .next()
         .context("Manifest Entry Expected")??;
-    if let avro_rs::types::Value::Record(values) = record {
-        let values: HashMap<String, avro_rs::types::Value> = HashMap::from_iter(values.into_iter());
+    if let apache_avro::types::Value::Record(values) = record {
+        let values: HashMap<String, apache_avro::types::Value> =
+            HashMap::from_iter(values.into_iter());
         let status = values.get("status").context("status not found")?;
         let snapshot_id = values
             .get("snapshot_id")
-            .map(avro_rs::from_value)
+            .map(apache_avro::from_value)
             .transpose()?;
         let sequence_number = values
             .get("sequence_number")
-            .map(avro_rs::from_value)
+            .map(apache_avro::from_value)
             .transpose()?;
         Ok(ManifestEntry {
-            status: avro_rs::from_value(status)?,
+            status: apache_avro::from_value(status)?,
             snapshot_id: snapshot_id.flatten(),
             sequence_number: sequence_number.flatten(),
         })
@@ -193,7 +190,7 @@ fn read_manifest_entry<R: std::io::Read>(reader: &mut avro_rs::Reader<R>) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
-    use avro_rs;
+    use apache_avro;
     use proptest::prelude::*;
 
     fn status_strategy() -> impl Strategy<Value = Status> {
@@ -231,15 +228,15 @@ mod tests {
                 ]
             } 
             "#;
-                let schema = avro_rs::Schema::parse_str(raw_schema).unwrap();
-                let mut writer = avro_rs::Writer::new(&schema, Vec::new());
+                let schema = apache_avro::Schema::parse_str(raw_schema).unwrap();
+                let mut writer = apache_avro::Writer::new(&schema, Vec::new());
                 writer.append_ser(&a).unwrap();
 
                 let encoded = writer.into_inner().unwrap();
 
-                let reader = avro_rs::Reader::new(&encoded[..]).unwrap();
+                let reader = apache_avro::Reader::new(&encoded[..]).unwrap();
                 for value in reader {
-                    let entry = avro_rs::from_value::<ManifestEntry>(&value.unwrap()).unwrap();
+                    let entry = apache_avro::from_value::<ManifestEntry>(&value.unwrap()).unwrap();
                     assert_eq!(a, entry)
                 }
 
@@ -257,7 +254,7 @@ mod tests {
                 ]
             } 
             "#;
-            let schema = avro_rs::Schema::parse_str(raw_schema).unwrap();
+            let schema = apache_avro::Schema::parse_str(raw_schema).unwrap();
             // TODO: make this a correct partition spec
             let partition_spec = r#"{"spec-id": "0"}"#;
             let partition_spec_id = "2";
@@ -267,25 +264,25 @@ mod tests {
             let format_version = "1";
             let content = "data";
 
-            let meta: std::collections::HashMap<String, Vec<u8>> =
+            let meta: std::collections::HashMap<String, apache_avro::types::Value> =
                 std::collections::HashMap::from_iter(vec![
-                    ("schema".to_string(), table_schema.as_bytes().to_vec()),
-                    ("schema-id".to_string(), table_schema_id.as_bytes().to_vec()),
-                    ("partition-spec".to_string(), partition_spec.as_bytes().to_vec()),
-                    ("partition-spec-id".to_string(), partition_spec_id.as_bytes().to_vec()),
-                    ("format-version".to_string(), format_version.as_bytes().to_vec()),
-                    ("content".to_string(), content.as_bytes().to_vec())
+                    ("schema".to_string(), table_schema.into()),
+                    ("schema-id".to_string(), table_schema_id.into()),
+                    ("partition-spec".to_string(), partition_spec.into()),
+                    ("partition-spec-id".to_string(), partition_spec_id.into()),
+                    ("format-version".to_string(), format_version.into()),
+                    ("content".to_string(), content.into())
                     ],
                 );
-            let mut writer = avro_rs::Writer::builder()
+            let mut writer = apache_avro::Writer::builder()
             .schema(&schema)
             .writer(vec![])
-            .metadata(meta)
+            .user_metadata(meta)
             .build();
             writer.append_ser(&a).unwrap();
 
             let encoded = writer.into_inner().unwrap();
-            let reader = avro_rs::Reader::new(&encoded[..]).unwrap();
+            let reader = apache_avro::Reader::new(&encoded[..]).unwrap();
             let metadata = read_metadata(&reader).unwrap();
             assert_eq!(metadata.schema, table_schema.to_string());
             assert_eq!(metadata.schema_id, Some(table_schema_id.to_string()));
@@ -307,15 +304,15 @@ mod tests {
                 ]
             }
             "#;
-            let schema = avro_rs::Schema::parse_str(raw_schema).unwrap();
-           let mut writer = avro_rs::Writer::builder()
+            let schema = apache_avro::Schema::parse_str(raw_schema).unwrap();
+           let mut writer = apache_avro::Writer::builder()
             .schema(&schema)
             .writer(vec![])
             .build();
             writer.append_ser(&a).unwrap();
 
             let encoded = writer.into_inner().unwrap();
-            let mut reader = avro_rs::Reader::new(&encoded[..]).unwrap();
+            let mut reader = apache_avro::Reader::new(&encoded[..]).unwrap();
             let metadata_entry = read_manifest_entry(&mut reader).unwrap();
             assert_eq!(a.status, metadata_entry.status);
             assert_eq!(a.snapshot_id, metadata_entry.snapshot_id);
