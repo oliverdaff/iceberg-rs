@@ -7,6 +7,8 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
+use super::partition::PartitionSpec;
+
 /// Details of a manifest file
 pub struct Manifest {
     /// The manifest metadata
@@ -71,26 +73,64 @@ pub enum Content {
     EqualityDeletes = 2,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 /// Name of file format
 pub enum FileFormat {
     /// Avro file
-    Avro,
+    Avro = 0,
     /// Orc file
-    Orc,
+    Orc = 1,
     /// Parquet file
-    Parquet,
+    Parquet = 2,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+/// Serialize for PrimitiveType wit special handling for
+/// Decimal and Fixed types.
+impl Serialize for FileFormat {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use FileFormat::*;
+        match self {
+            Avro => serializer.serialize_str("avro"),
+            Orc => serializer.serialize_str("orc"),
+            Parquet => serializer.serialize_str("parquet"),
+        }
+    }
+}
+
+/// Serialize for PrimitiveType wit special handling for
+/// Decimal and Fixed types.
+impl<'de> Deserialize<'de> for FileFormat {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        if s == "avro" {
+            Ok(FileFormat::Avro)
+        } else if s == "orc" {
+            Ok(FileFormat::Orc)
+        } else if s == "parquet" {
+            Ok(FileFormat::Parquet)
+        } else {
+            Err(serde::de::Error::custom("Invalid data file format."))
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 /// DataFile found in Manifest.
 pub struct DataFile {
     ///Type of content in data file.
     pub content: Option<Content>,
     /// Full URI for the file with a FS scheme.
     pub file_path: String,
-
-    // TODO: Partition Data
+    /// String file format name, avro, orc or parquet
+    pub file_format: FileFormat,
+    /// Partition data tuple, schema based on the partition spec output using partition field ids for the struct field ids
+    pub partition: PartitionSpec,
     /// Number of records in this file
     pub record_count: i64,
     /// Total file size in bytes
@@ -190,7 +230,11 @@ fn read_manifest_entry<R: std::io::Read>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apache_avro::{self, types::Value};
+    use apache_avro::{
+        self,
+        types::{Record, Value},
+        *,
+    };
     use proptest::prelude::*;
 
     fn status_strategy() -> impl Strategy<Value = Status> {
@@ -319,5 +363,63 @@ mod tests {
             assert_eq!(a.sequence_number, metadata_entry.sequence_number);
     }
 
+    }
+
+    #[test]
+    fn test_read_() {
+        let raw_schema = r#"
+        {
+            "type": "record",
+            "name": "test",
+            "fields": [
+                {"name": "a", "type": "long", "default": 42},
+                {"name": "b", "type": "record"}
+            ]
+        }
+    "#;
+        let raw_record_schema = r#"
+        {
+            "type": "record",
+            "name": "record",
+            "fields": [
+                {"name": "b", "type": "string"}
+            ]
+        }
+    "#;
+        #[derive(Debug, Serialize)]
+        struct Test {
+            a: i64,
+            b: String,
+        }
+
+        let schema = Schema::parse_str(raw_schema).unwrap();
+        let record_schema = Schema::parse_str(raw_record_schema).unwrap();
+
+        println!("{:?}", schema);
+
+        let mut writer = Writer::with_codec(&schema, Vec::new(), Codec::Deflate);
+
+        let mut inner_record = Record::new(&record_schema).unwrap();
+        inner_record.put("b", "foo");
+
+        let mut record = Record::new(writer.schema()).unwrap();
+        record.put("a", 27i64);
+        record.put("b", inner_record);
+
+        writer.append(record).unwrap();
+
+        // let test = Test {
+        //     a: 27,
+        //     b: "foo".to_owned(),
+        // };
+
+        // writer.append_ser(test).unwrap();
+
+        let input = writer.into_inner().unwrap();
+        let reader = Reader::with_schema(&schema, &input[..]).unwrap();
+
+        for record in reader {
+            println!("{:?}", &record.unwrap());
+        }
     }
 }
