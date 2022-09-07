@@ -40,11 +40,11 @@ pub enum Value {
     /// A struct is a tuple of typed values. Each field in the tuple is named and has an integer id that is unique in the table schema.
     /// Each field can be either optional or required, meaning that values can (or cannot) be null. Fields may be any type.
     /// Fields may have an optional comment or doc string. Fields can have default values.
-    Struct(Vec<(String, Field, Option<String>)>),
+    Struct(HashMap<u32, (String, Field, Option<String>)>),
     /// A list is a collection of values with some element type.
     /// The element field has an integer id that is unique in the table schema.
     /// Elements can be either optional or required. Element types may be any type.
-    List(Vec<(Field, Option<String>)>),
+    List(HashMap<u32, (Field, Option<String>)>),
     /// A map is a collection of key-value pairs with a key type and a value type.
     /// Both the key field and value field each have an integer id that is unique in the table schema.
     /// Map keys are required and map values can be either optional or required. Both map keys and map values may be any type, including nested types.
