@@ -117,7 +117,7 @@ impl ManifestEntry {
         partition_spec_name: &str,
     ) -> Result<Record<'schema>> {
         let mut record =
-            Record::new(schema).ok_or(anyhow!("Failed to create Record with schema."))?;
+            Record::new(schema).ok_or_else(|| anyhow!("Failed to create Record with schema."))?;
         let value = apache_avro::to_value(self)?;
         if let Value::Record(mut my_manifest_entry) = value {
             my_manifest_entry
@@ -260,13 +260,13 @@ impl PartitionStruct {
         let partition_specs: Vec<PartitionField> = serde_json::from_slice(
             &metadata
                 .get("partition-spec")
-                .ok_or(anyhow!("No partition spec in metadata."))?
+                .ok_or_else(|| anyhow!("No partition spec in metadata."))?
                 .to_vec(),
         )?;
         let partition_spec_id: i32 = serde_json::from_slice(
             &metadata
                 .get("partition-spec-id")
-                .ok_or(anyhow!("No partition spec in metadata."))?
+                .ok_or_else(|| anyhow!("No partition spec in metadata."))?
                 .to_vec(),
         )?;
         Ok(
@@ -296,7 +296,7 @@ pub struct AvroMap<T: Serialize + Clone>(HashMap<i32, T>);
 impl<T: Serialize + Clone> core::ops::Deref for AvroMap<T> {
     type Target = HashMap<i32, T>;
 
-    fn deref(self: &'_ Self) -> &'_ Self::Target {
+    fn deref(self: &'_ AvroMap<T>) -> &'_ Self::Target {
         &self.0
     }
 }
