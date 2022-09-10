@@ -68,3 +68,181 @@ pub struct ManifestFile {
     /// Implementation-specific key metadata for encryption
     key_metadata: Option<ByteBuf>,
 }
+
+impl ManifestFile {
+    /// Get schema of manifest list
+    pub fn schema() -> String {
+        r#"
+        {
+            "type": "record",
+            "name": "manifest_list",
+            "fields": [
+                {
+                    "name": "manifest_path",
+                    "type": "string",
+                    "field_id": 500
+                },
+                {
+                    "name": "manifest_length",
+                    "type": "long",
+                    "field_id": 501
+                },
+                {
+                    "name": "partition_spec_id",
+                    "type": "int",
+                    "field_id": 502
+                },
+                {
+                    "name": "content",
+                    "type": [
+                        "null",
+                        "int"
+                    ],
+                    "default": null,
+                    "field_id": 517
+                },
+                {
+                    "name": "sequence_number",
+                    "type": [
+                        "null",
+                        "long"
+                    ],
+                    "default": null,
+                    "field_id": 515
+                },
+                {
+                    "name": "min_sequence_number",
+                    "type": [
+                        "null",
+                        "long"
+                    ],
+                    "default": null,
+                    "field_id": 516
+                },
+                {
+                    "name": "added_snapshot_id",
+                    "type": "long",
+                    "default": null,
+                    "field_id": 503
+                },
+                {
+                    "name": "added_files_count",
+                    "type": [
+                        "null",
+                        "int"
+                    ],
+                    "default": null,
+                    "field_id": 504
+                },
+                {
+                    "name": "existing_files_count",
+                    "type": [
+                        "null",
+                        "int"
+                    ],
+                    "default": null,
+                    "field_id": 505
+                },
+                {
+                    "name": "deleted_files_count",
+                    "type": [
+                        "null",
+                        "int"
+                    ],
+                    "default": null,
+                    "field_id": 506
+                },
+                {
+                    "name": "added_rows_count",
+                    "type": [
+                        "null",
+                        "long"
+                    ],
+                    "default": null,
+                    "field_id": 512
+                },
+                {
+                    "name": "existing_rows_count",
+                    "type": [
+                        "null",
+                        "long"
+                    ],
+                    "default": null,
+                    "field_id": 513
+                },
+                {
+                    "name": "deleted_rows_count",
+                    "type": [
+                        "null",
+                        "long"
+                    ],
+                    "default": null,
+                    "field_id": 514
+                },
+                {
+                    "name": "sort_columns",
+                    "type": [
+                        "null",
+                        {
+                            "type": "array",
+                            "items": {
+                                "type": "record",
+                                "name": "field_summary",
+                                "fields": [
+                                    {
+                                        "name": "contains_null",
+                                        "type": "boolean",
+                                        "field_id": 509
+                                    },
+                                    {
+                                        "name": "contains_nan",
+                                        "type": [
+                                            "null",
+                                            "boolean"
+                                        ],
+                                        "field_id": 518
+                                    },
+                                    {
+                                        "name": "lower_bound",
+                                        "type": [
+                                            "null",
+                                            "bytes"
+                                        ],
+                                        "field_id": 510
+                                    },
+                                    {
+                                        "name": "upper_bound",
+                                        "type": [
+                                            "null",
+                                            "bytes"
+                                        ],
+                                        "field_id": 511
+                                    }
+                                ]
+                            },
+                            "element-id": 112
+                        }
+                    ],
+                    "default": null,
+                    "field_id": 507
+                },
+                {
+                    "name": "key_metadata",
+                    "type": [
+                        "null",
+                        "bytes"
+                    ],
+                    "field_id": 519
+                }
+            ]
+        }
+        "#
+        .to_owned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    pub fn test_read() {}
+}
