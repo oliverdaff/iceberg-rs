@@ -2,7 +2,10 @@
  * Types in iceberg
  */
 
-use std::collections::HashMap;
+use std::{
+    collections::{BTreeMap, HashMap},
+    ops::Index,
+};
 
 use super::decimal::Decimal;
 
@@ -40,11 +43,11 @@ pub enum Value {
     /// A struct is a tuple of typed values. Each field in the tuple is named and has an integer id that is unique in the table schema.
     /// Each field can be either optional or required, meaning that values can (or cannot) be null. Fields may be any type.
     /// Fields may have an optional comment or doc string. Fields can have default values.
-    Struct(HashMap<u32, (String, Field, Option<String>)>),
+    Struct(Struct),
     /// A list is a collection of values with some element type.
     /// The element field has an integer id that is unique in the table schema.
     /// Elements can be either optional or required. Element types may be any type.
-    List(HashMap<u32, (Field, Option<String>)>),
+    List(Vec<(Field, Option<String>)>),
     /// A map is a collection of key-value pairs with a key type and a value type.
     /// Both the key field and value field each have an integer id that is unique in the table schema.
     /// Map keys are required and map values can be either optional or required. Both map keys and map values may be any type, including nested types.
@@ -57,6 +60,27 @@ pub enum Field {
     Required(Value),
     /// Optional value, can be null
     Optional(Option<Value>),
+}
+
+/// An iceberg struct
+pub struct Struct {
+    fields: Vec<(Field, Option<String>)>,
+    lookup: BTreeMap<String, usize>,
+}
+
+impl Struct {
+    /// Get a reference to a struct field
+    pub fn get(&self, name: &str) -> Option<&(Field, Option<String>)> {
+        self.lookup.get(name).map(|index| &self.fields[*index])
+    }
+}
+
+impl Index<usize> for Struct {
+    type Output = (Field, Option<String>);
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.fields[index]
+    }
 }
 
 #[cfg(test)]

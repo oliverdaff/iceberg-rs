@@ -837,14 +837,6 @@ mod tests {
 
                 let encoded = writer.into_inner().unwrap();
 
-                // let partition_read_schema = PartitionStruct::read_schema::<&[u8]>(encoded.as_ref()).unwrap();
-
-                // let raw_read_schema = ManifestEntry::schema(&partition_read_schema);
-
-                // let read_schema = apache_avro::Schema::parse_str(&raw_read_schema).unwrap();
-
-                // dbg!(&read_schema);
-
                 let reader = apache_avro::Reader::new( &encoded[..]).unwrap();
 
                 for value in reader {
