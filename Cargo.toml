@@ -23,6 +23,7 @@ serde_repr = "0.1"
 num-bigint = "0.4.3"
 anyhow = "1.0.57"
 chrono = { version = "0.4.19", features = ["serde"] }
+serde_bytes = "0.11.7"
 
 [dev-dependencies]
 proptest = "1.0"
