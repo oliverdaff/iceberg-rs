@@ -4,7 +4,10 @@ Manifest files
 use std::{collections::HashMap, io::Read};
 
 use anyhow::{anyhow, Context, Result};
-use apache_avro::Reader;
+use apache_avro::{
+    types::{Record, Value},
+    Reader, Schema,
+};
 use serde::{de::DeserializeOwned, ser::SerializeSeq, Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -107,6 +110,75 @@ impl ManifestEntry {
             ]
         }"#
     }
+    /// Turn manifest entry into a record.
+    pub fn into_record<'schema>(
+        self,
+        schema: &'schema Schema,
+        partition_spec_name: &str,
+    ) -> Result<Record<'schema>> {
+        let mut record =
+            Record::new(schema).ok_or(anyhow!("Failed to create Record with schema."))?;
+        let value = apache_avro::to_value(self)?;
+        if let Value::Record(mut my_manifest_entry) = value {
+            my_manifest_entry
+                .iter_mut()
+                .filter(|x| x.0 == "data_file")
+                .for_each(|(_, data_file)| {
+                    if let Value::Record(ref mut my_data_file) = data_file {
+                        my_data_file
+                            .iter_mut()
+                            .filter(|y| y.0 == "partition")
+                            .for_each(|(_, partition)| {
+                                if let Value::Record(ref mut my_record) = partition {
+                                    my_record
+                                        .iter_mut()
+                                        .filter(|z| z.0 == "partition_spec_name")
+                                        .for_each(|(name, _)| {
+                                            *name = partition_spec_name.to_string();
+                                        })
+                                }
+                            })
+                    }
+                });
+            for (key, value) in my_manifest_entry {
+                record.put(&key, value)
+            }
+            Ok(record)
+        } else {
+            Err(anyhow!("ManifestEntry is not a record."))
+        }
+    }
+}
+
+impl TryFrom<Value> for ManifestEntry {
+    type Error = anyhow::Error;
+
+    fn try_from(mut value: Value) -> Result<Self, Self::Error> {
+        if let Value::Record(ref mut my_manifest_entry) = value {
+            my_manifest_entry
+                .iter_mut()
+                .filter(|x| x.0 == "data_file")
+                .for_each(|(_, data_file)| {
+                    if let Value::Record(ref mut my_data_file) = data_file {
+                        my_data_file
+                            .iter_mut()
+                            .filter(|y| y.0 == "partition")
+                            .for_each(|(_, partition)| {
+                                if let Value::Record(ref mut my_record) = partition {
+                                    if my_record.len() == 1 {
+                                        if let Some((name, _)) = my_record.get_mut(0) {
+                                            *name = "partition_spec_name".to_string();
+                                        }
+                                    }
+                                }
+                            })
+                    }
+                });
+            apache_avro::from_value::<ManifestEntry>(&value).map_err(anyhow::Error::msg)
+        } else {
+            Err(anyhow!("ManifestEntry is not a record."))
+        }
+    }
 }
 
 #[derive(Debug, Serialize_repr, Deserialize_repr, PartialEq, Eq, Clone)]
@@ -200,14 +272,14 @@ impl PartitionStruct {
         Ok(
             r#"{"type": "record","name": "r102","fields": [{"name": ""#.to_owned()
                 + &partition_specs[partition_spec_id as usize].name
-                + r#"", "type":  ["null","long"], "default": null, "aliases": ["partition_spec_name"]}]}"#,
+                + r#"", "type":  ["null","long"], "aliases": ["partition_spec_name"], "default": null}]}"#,
         )
     }
     /// Get the schema for writing the PartitionStruct
     pub fn write_schema(partition_spec_name: &str) -> String {
-        r#"{"type": "record","name": "r102","fields": [{"name": "partition_spec_name", "type":  ["null","long"], "default": null, "aliases": [""#.to_owned()
-        + partition_spec_name
-        + r#""]}]}"#
+        r#"{"type": "record","name": "r102","fields": [{"name": ""#.to_owned()
+            + partition_spec_name
+            + r#"", "type":  ["null","long"], "aliases": ["partition_spec_name"], "default": null}]}"#
     }
 }
 
@@ -669,7 +741,7 @@ fn read_manifest_entry<R: std::io::Read>(
         .into_iter()
         .next()
         .context("Manifest Entry Expected")??;
-    apache_avro::from_value(&record).map_err(anyhow::Error::msg)
+    record.try_into()
 }
 
 #[cfg(test)]
@@ -726,11 +798,11 @@ mod tests {
     proptest! {
             #[test]
             fn test_manifest_entry(a in arb_manifest_entry()) {
-                let partition_write_schema = PartitionStruct::write_schema("date");
+                let partition_schema = PartitionStruct::write_schema("date");
 
-                let raw_write_schema = ManifestEntry::schema(&partition_write_schema);
+                let raw_schema = ManifestEntry::schema(&partition_schema);
 
-                let write_schema = apache_avro::Schema::parse_str(&raw_write_schema).unwrap();
+                let schema = apache_avro::Schema::parse_str(&raw_schema).unwrap();
 
                 // TODO: make this a correct partition spec
                 let partition_spec = r#"[{
@@ -757,37 +829,37 @@ mod tests {
                     ],
                 );
             let mut writer = apache_avro::Writer::builder()
-            .schema(&write_schema)
+            .schema(&schema)
             .writer(vec![])
             .user_metadata(meta)
             .build();
-            writer.append_ser(&a).unwrap();
+            writer.append(a.clone().into_record(&schema,"date").unwrap()).unwrap();
 
                 let encoded = writer.into_inner().unwrap();
 
-                let partition_read_schema = PartitionStruct::read_schema::<&[u8]>(encoded.as_ref()).unwrap();
+                // let partition_read_schema = PartitionStruct::read_schema::<&[u8]>(encoded.as_ref()).unwrap();
 
-                let raw_read_schema = ManifestEntry::schema(&partition_read_schema);
+                // let raw_read_schema = ManifestEntry::schema(&partition_read_schema);
 
-                let read_schema = apache_avro::Schema::parse_str(&raw_read_schema).unwrap();
+                // let read_schema = apache_avro::Schema::parse_str(&raw_read_schema).unwrap();
 
-                dbg!(&read_schema);
+                // dbg!(&read_schema);
 
-                let reader = apache_avro::Reader::with_schema(&read_schema, &encoded[..]).unwrap();
+                let reader = apache_avro::Reader::new( &encoded[..]).unwrap();
 
                 for value in reader {
-                    let entry = apache_avro::from_value::<ManifestEntry>(&value.unwrap()).unwrap();
+                    let entry = ManifestEntry::try_from(value.unwrap()).unwrap();
                     assert_eq!(a, entry)
                 }
 
             }
             #[test]
             fn test_read_manifest(a in arb_manifest_entry()) {
-            let partition_write_schema = PartitionStruct::write_schema("date");
+            let partition_schema = PartitionStruct::write_schema("date");
 
-            let raw_write_schema = ManifestEntry::schema(&partition_write_schema);
+            let raw_schema = ManifestEntry::schema(&partition_schema);
 
-            let write_schema = apache_avro::Schema::parse_str(&raw_write_schema).unwrap();
+            let schema = apache_avro::Schema::parse_str(&raw_schema).unwrap();
 
             // TODO: make this a correct partition spec
             let partition_spec = r#"[{
@@ -814,11 +886,11 @@ mod tests {
                     ],
                 );
             let mut writer = apache_avro::Writer::builder()
-            .schema(&write_schema)
+            .schema(&schema)
             .writer(vec![])
             .user_metadata(meta)
             .build();
-            writer.append_ser(&a).unwrap();
+            writer.append(a.clone().into_record(&schema,"date").unwrap()).unwrap();
 
             let encoded = writer.into_inner().unwrap();
 
@@ -834,11 +906,11 @@ mod tests {
     #[test]
     fn test_read_manifest_entry(a in arb_manifest_entry()) {
 
-            let partition_write_schema = PartitionStruct::write_schema("date");
+            let partition_schema = PartitionStruct::write_schema("date");
 
-            let raw_write_schema = ManifestEntry::schema(&partition_write_schema);
+            let raw_schema = ManifestEntry::schema(&partition_schema);
 
-            let write_schema = apache_avro::Schema::parse_str(&raw_write_schema).unwrap();
+            let schema = apache_avro::Schema::parse_str(&raw_schema).unwrap();
 
             // TODO: make this a correct partition spec
             let partition_spec = r#"[{
@@ -865,53 +937,21 @@ mod tests {
                     ],
                 );
             let mut writer = apache_avro::Writer::builder()
-            .schema(&write_schema)
+            .schema(&schema)
             .writer(vec![])
             .user_metadata(meta)
             .build();
-            writer.append_ser(&a).unwrap();
+            writer.append(a.clone().into_record(&schema,"date").unwrap()).unwrap();
 
             let encoded = writer.into_inner().unwrap();
-            let partition_read_schema = PartitionStruct::read_schema::<&[u8]>(encoded.as_ref()).unwrap();
 
-            let raw_read_schema = ManifestEntry::schema(&partition_read_schema);
-
-            let read_schema = apache_avro::Schema::parse_str(&raw_read_schema).unwrap();
-
-            let mut reader = apache_avro::Reader::with_schema(&read_schema, &encoded[..]).unwrap();
+            let mut reader = apache_avro::Reader::new( &encoded[..]).unwrap();
             let metadata_entry = read_manifest_entry(&mut reader).unwrap();
             assert_eq!(a.status, metadata_entry.status);
             assert_eq!(a.snapshot_id, metadata_entry.snapshot_id);
             assert_eq!(a.sequence_number, metadata_entry.sequence_number);
+            assert_eq!(a.data_file.partition, metadata_entry.data_file.partition);
     }
 
-    }
-
-    #[test]
-    fn test_avro_read() {
-        use std::fs;
-
-        let file = fs::read("7e6760f0-4f6c-4b23-b907-0a5a174e3863-m0.avro").unwrap();
-
-        let partition_schema = PartitionStruct::read_schema::<&[u8]>(file.as_ref()).unwrap();
-
-        dbg!(&partition_schema);
-
-        let raw_schema = ManifestEntry::schema(&partition_schema);
-
-        let schema = apache_avro::Schema::parse_str(&raw_schema).unwrap();
-
-        let reader = apache_avro::Reader::with_schema(&schema, &*file).unwrap();
-
-        for value in reader {
-            println!(
-                "{:?}",
-                apache_avro::from_value::<ManifestEntry>(&value.unwrap())
-                    .unwrap()
-                    .data_file
-                    .partition
-            )
-        }
-        panic!()
     }
 }
