@@ -63,6 +63,7 @@ let data = r#"
 
 */
 
+pub mod manifest_list;
 pub mod partition;
 pub mod schema;
 pub mod snapshot;
