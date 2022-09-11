@@ -52,7 +52,7 @@ pub struct ManifestFile {
     /// ID of the snapshot where the manifest file was added
     added_snapshot_id: i64,
     /// Number of entries in the manifest that have status ADDED (1), when null this is assumed to be non-zero
-    added_files_count: i32,
+    added_files_count: Option<i32>,
     /// Number of entries in the manifest that have status EXISTING (0), when null this is assumed to be non-zero
     existing_files_count: Option<i32>,
     /// Number of entries in the manifest that have status DELETED (2), when null this is assumed to be non-zero
@@ -180,7 +180,7 @@ impl ManifestFile {
                     "field_id": 514
                 },
                 {
-                    "name": "sort_columns",
+                    "name": "partitions",
                     "type": [
                         "null",
                         {
@@ -243,6 +243,48 @@ impl ManifestFile {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    pub fn test_read() {}
+    pub fn test_roundtrip() {
+        let manifest_file = ManifestFile {
+            manifest_path: "".to_string(),
+            manifest_length: 1200,
+            partition_spec_id: 0,
+            content: Some(Content::Data),
+            sequence_number: Some(566),
+            min_sequence_number: Some(0),
+            added_snapshot_id: 39487483032,
+            added_files_count: Some(1),
+            existing_files_count: Some(2),
+            deleted_files_count: Some(0),
+            added_rows_count: Some(1000),
+            existing_rows_count: Some(8000),
+            deleted_rows_count: Some(0),
+            partitions: Some(vec![FieldSummary {
+                contains_null: true,
+                contains_nan: Some(false),
+                lower_bound: None,
+                upper_bound: None,
+            }]),
+            key_metadata: None,
+        };
+
+        let raw_schema = ManifestFile::schema();
+
+        let schema = apache_avro::Schema::parse_str(&raw_schema).unwrap();
+
+        let mut writer = apache_avro::Writer::new(&schema, Vec::new());
+
+        writer.append_ser(manifest_file.clone()).unwrap();
+
+        let encoded = writer.into_inner().unwrap();
+
+        let reader = apache_avro::Reader::new(&*encoded).unwrap();
+
+        for record in reader {
+            let result = apache_avro::from_value::<ManifestFile>(&record.unwrap()).unwrap();
+            assert_eq!(manifest_file, result);
+        }
+    }
 }
