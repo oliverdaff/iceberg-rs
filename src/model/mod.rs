@@ -62,10 +62,12 @@ let data = r#"
 ```
 
 */
-
 pub mod manifest_list;
+pub mod decimal;
+pub mod manifest;
 pub mod partition;
 pub mod schema;
 pub mod snapshot;
 pub mod sort;
 pub mod table;
+pub mod types;
