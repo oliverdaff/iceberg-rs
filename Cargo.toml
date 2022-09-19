@@ -18,12 +18,16 @@ serde_json = "1.0"
 uuid = { version = "0.8", features = ["serde", "v4"] }
 regex = "1.5.5"
 lazy_static = "1.4.0"
+apache-avro = "0.14.0"
+serde_repr = "0.1"
+num-bigint = "0.4.3"
+chrono = { version = "0.4.19", features = ["serde"] }
+serde_bytes = "0.11.7"
 anyhow = "1.0"
 async-trait = "0.1.57"
 itertools = "0.10.3"
 object_store = "0.4.0"
 futures = "0.3.24"
-
 
 [dev-dependencies]
 proptest = "1.0"
