@@ -14,6 +14,7 @@ use crate::{
     transaction::Transaction,
 };
 
+pub mod files;
 pub mod table_builder;
 
 /// Tables can be either one of following types:
@@ -117,11 +118,11 @@ impl Table {
             TableType::Metastore(_, catalog) => Some(catalog),
         }
     }
-    /// Get the object_store associated to the table, returns None if the table is a metastore table
-    pub fn object_store(&self) -> Option<&Arc<dyn ObjectStore>> {
+    /// Get the object_store associated to the table
+    pub fn object_store(&self) -> Arc<dyn ObjectStore> {
         match &self.table_type {
-            TableType::FileSystem(object_store) => Some(object_store),
-            TableType::Metastore(_, _) => None,
+            TableType::FileSystem(object_store) => Arc::clone(object_store),
+            TableType::Metastore(_, catalog) => catalog.object_store(),
         }
     }
     /// Get the metadata of the table

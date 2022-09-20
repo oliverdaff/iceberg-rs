@@ -43,8 +43,8 @@ impl<'table> Transaction<'table> {
             op.execute(table);
             table
         });
-        match (table.catalog(), table.identifier(), table.object_store()) {
-            (Some(catalog), Some(identifier), _) => {
+        match (table.catalog(), table.identifier()) {
+            (Some(catalog), Some(identifier)) => {
                 let object_store = catalog.object_store();
                 let location = &table.metadata().location;
                 let transaction_uuid = Uuid::new_v4();
@@ -74,7 +74,8 @@ impl<'table> Transaction<'table> {
                 *table = new_table;
                 Ok(())
             }
-            (_, _, Some(object_store)) => {
+            (_, _) => {
+                let object_store = table.object_store();
                 let location = &table.metadata().location;
                 let uuid = Uuid::new_v4();
                 let version = &table.metadata().last_sequence_number;
@@ -100,13 +101,10 @@ impl<'table> Transaction<'table> {
                     .delete(&temp_path)
                     .await
                     .map_err(|err| anyhow!(err.to_string()))?;
-                let new_table = Table::load_file_system_table(location, object_store).await?;
+                let new_table = Table::load_file_system_table(location, &object_store).await?;
                 *table = new_table;
                 Ok(())
             }
-            (_, _, _) => Err(anyhow!(
-                "Table can't be both a filesystem and a metastore table."
-            )),
         }
     }
 }
