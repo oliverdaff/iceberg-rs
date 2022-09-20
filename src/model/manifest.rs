@@ -249,7 +249,7 @@ impl<'de> Deserialize<'de> for FileFormat {
 /// But this means that the schema for reading and writing are different.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct PartitionStruct {
-    partition_spec_name: Option<i64>,
+    pub(crate) partition_spec_name: Option<i64>,
 }
 
 impl PartitionStruct {

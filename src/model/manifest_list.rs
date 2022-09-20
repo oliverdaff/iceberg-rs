@@ -22,15 +22,15 @@ pub enum Content {
 /// DataFile found in Manifest.
 pub struct FieldSummary {
     /// Whether the manifest contains at least one partition with a null value for the field
-    contains_null: bool,
+    pub contains_null: bool,
     /// Whether the manifest contains at least one partition with a NaN value for the field
-    contains_nan: Option<bool>,
+    pub contains_nan: Option<bool>,
     /// Lower bound for the non-null, non-NaN values in the partition field, or null if all values are null or NaN.
     /// If -0.0 is a value of the partition field, the lower_bound must not be +0.0
-    lower_bound: Option<ByteBuf>,
+    pub lower_bound: Option<ByteBuf>,
     /// Upper bound for the non-null, non-NaN values in the partition field, or null if all values are null or NaN .
     /// If +0.0 is a value of the partition field, the upper_bound must not be -0.0.
-    upper_bound: Option<ByteBuf>,
+    pub upper_bound: Option<ByteBuf>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]

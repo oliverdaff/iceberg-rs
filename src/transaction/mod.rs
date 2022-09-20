@@ -2,6 +2,7 @@
  * Defines the [Transaction] type that performs multiple [Operation]s with ACID properties.
 */
 
+use futures::StreamExt;
 use object_store::path::Path;
 use uuid::Uuid;
 
@@ -21,7 +22,6 @@ pub struct Transaction<'table> {
 impl<'table> Transaction<'table> {
     /// Create a transaction for the given table.
     pub fn new(table: &'table mut Table) -> Self {
-        table.increment_sequence_number();
         Transaction {
             table,
             operations: vec![],
@@ -37,12 +37,25 @@ impl<'table> Transaction<'table> {
         self.operations.push(Operation::UpdateSpec(spec_id));
         self
     }
+    /// Quickly append files to the table
+    pub fn fast_append(mut self, files: Vec<String>) -> Self {
+        self.operations.push(Operation::NewFastAppend(files));
+        self
+    }
     /// Commit the transaction to perform the [Operation]s with ACID guarantees.
     pub async fn commit(self) -> Result<()> {
-        let table = self.operations.into_iter().fold(self.table, |table, op| {
-            op.execute(table);
-            table
-        });
+        self.table.increment_sequence_number();
+        self.table.new_snapshot();
+        let table = futures::stream::iter(self.operations)
+            .fold(
+                Ok::<&mut Table, anyhow::Error>(self.table),
+                |table, op| async move {
+                    let table = table?;
+                    op.execute(table).await?;
+                    Ok(table)
+                },
+            )
+            .await?;
         match (table.catalog(), table.identifier()) {
             (Some(catalog), Some(identifier)) => {
                 let object_store = catalog.object_store();
