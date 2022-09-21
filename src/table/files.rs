@@ -173,11 +173,20 @@ mod tests {
                 .await
                 .unwrap();
 
-        let transaction = table.new_transaction();
-        transaction
+        table
+            .new_transaction()
             .fast_append(vec![
-                "/test/append/data/file1.parquet".to_string(),
-                "/test/append/data/file2.parquet".to_string(),
+                "test/append/data/file1.parquet".to_string(),
+                "test/append/data/file2.parquet".to_string(),
+            ])
+            .commit()
+            .await
+            .unwrap();
+        table
+            .new_transaction()
+            .fast_append(vec![
+                "test/append/data/file3.parquet".to_string(),
+                "test/append/data/file4.parquet".to_string(),
             ])
             .commit()
             .await
@@ -189,11 +198,19 @@ mod tests {
             .map(|manifest_entry| manifest_entry.map(|x| x.data_file.file_path));
         assert_eq!(
             files.next().await.unwrap().unwrap(),
-            "/test/append/data/file1.parquet".to_string()
+            "test/append/data/file1.parquet".to_string()
         );
         assert_eq!(
             files.next().await.unwrap().unwrap(),
-            "/test/append/data/file2.parquet".to_string()
+            "test/append/data/file2.parquet".to_string()
+        );
+        assert_eq!(
+            files.next().await.unwrap().unwrap(),
+            "test/append/data/file3.parquet".to_string()
+        );
+        assert_eq!(
+            files.next().await.unwrap().unwrap(),
+            "test/append/data/file4.parquet".to_string()
         );
     }
 }

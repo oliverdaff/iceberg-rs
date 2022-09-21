@@ -160,7 +160,8 @@ impl Table {
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap()
                 .as_millis() as i64,
-            manifest_list: "snap-".to_owned()
+            manifest_list: self.metadata().location.to_string()
+                + "/metadata/snap-"
                 + &snapshot_id.to_string()
                 + &uuid::Uuid::new_v4().to_string()
                 + ".avro",

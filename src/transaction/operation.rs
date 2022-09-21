@@ -102,7 +102,6 @@ impl Operation {
                 let manifest_location: Path = (manifest_list_location
                     .to_string()
                     .trim_end_matches(".avro")
-                    .trim_start_matches("snap-")
                     .to_owned()
                     + "-m0.avro")
                     .into();
@@ -110,7 +109,9 @@ impl Operation {
                     .put(&manifest_location, manifest_bytes.into())
                     .await?;
                 let manifest_list_schema = apache_avro::Schema::parse_str(&ManifestFile::schema())?;
-                let mut manifest_list_writer = match &table_metadata.snapshots {
+                let mut manifest_list_writer =
+                    apache_avro::Writer::new(&manifest_list_schema, Vec::new());
+                match &table_metadata.snapshots {
                     Some(snapshots) => {
                         if snapshots.len() > 1 {
                             let old_manifest_location: Path =
@@ -121,16 +122,12 @@ impl Operation {
                                 .bytes()
                                 .await?
                                 .into();
-                            Ok::<_, anyhow::Error>(apache_avro::Writer::new(
-                                &manifest_list_schema,
-                                bytes,
-                            ))
-                        } else {
-                            Ok(apache_avro::Writer::new(&manifest_list_schema, Vec::new()))
+                            let reader = apache_avro::Reader::new(&*bytes)?;
+                            manifest_list_writer.extend(reader.filter_map(Result::ok))?;
                         }
                     }
-                    None => Ok(apache_avro::Writer::new(&manifest_list_schema, Vec::new())),
-                }?;
+                    None => (),
+                };
                 let manifest_file = ManifestFile {
                     manifest_path: manifest_location.to_string(),
                     manifest_length: 1200,
@@ -222,8 +219,8 @@ mod tests {
         let transaction = table.new_transaction();
         transaction
             .fast_append(vec![
-                "/test/append/data/file1.parquet".to_string(),
-                "/test/append/data/file2.parquet".to_string(),
+                "test/append/data/file1.parquet".to_string(),
+                "test/append/data/file2.parquet".to_string(),
             ])
             .commit()
             .await
