@@ -2,7 +2,7 @@
 Defining the [Table] struct that represents an iceberg table.
 */
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc, time::SystemTime};
 
 use anyhow::{anyhow, Result};
 use futures::StreamExt;
@@ -10,10 +10,14 @@ use object_store::{path::Path, ObjectStore};
 
 use crate::{
     catalog::{table_identifier::TableIdentifier, Catalog},
-    model::table::TableMetadataV2,
+    model::{
+        snapshot::{SnapshotV2, Summary},
+        table::TableMetadataV2,
+    },
     transaction::Transaction,
 };
 
+pub mod files;
 pub mod table_builder;
 
 /// Tables can be either one of following types:
@@ -117,11 +121,11 @@ impl Table {
             TableType::Metastore(_, catalog) => Some(catalog),
         }
     }
-    /// Get the object_store associated to the table, returns None if the table is a metastore table
-    pub fn object_store(&self) -> Option<&Arc<dyn ObjectStore>> {
+    /// Get the object_store associated to the table
+    pub fn object_store(&self) -> Arc<dyn ObjectStore> {
         match &self.table_type {
-            TableType::FileSystem(object_store) => Some(object_store),
-            TableType::Metastore(_, _) => None,
+            TableType::FileSystem(object_store) => Arc::clone(object_store),
+            TableType::Metastore(_, catalog) => catalog.object_store(),
         }
     }
     /// Get the metadata of the table
@@ -142,6 +146,38 @@ impl Table {
 impl Table {
     pub(crate) fn increment_sequence_number(&mut self) {
         self.metadata.last_sequence_number += 1;
+    }
+
+    pub(crate) fn new_snapshot(&mut self) {
+        let mut bytes: [u8; 8] = [0u8; 8];
+        getrandom::getrandom(&mut bytes).unwrap();
+        let snapshot_id = i64::from_le_bytes(bytes);
+        let snapshot = SnapshotV2 {
+            snapshot_id: snapshot_id,
+            parent_snapshot_id: self.metadata().current_snapshot_id,
+            sequence_number: self.metadata().last_sequence_number + 1,
+            timestamp_ms: SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64,
+            manifest_list: self.metadata().location.to_string()
+                + "/metadata/snap-"
+                + &snapshot_id.to_string()
+                + &uuid::Uuid::new_v4().to_string()
+                + ".avro",
+            summary: Summary {
+                operation: None,
+                other: HashMap::new(),
+            },
+            schema_id: Some(self.metadata().current_schema_id as i64),
+        };
+        if let Some(snapshots) = &mut self.metadata.snapshots {
+            snapshots.push(snapshot);
+            self.metadata.current_snapshot_id = Some(snapshots.len() as i64)
+        } else {
+            self.metadata.snapshots = Some(vec![snapshot]);
+            self.metadata.current_snapshot_id = Some(0i64)
+        }
     }
 }
 

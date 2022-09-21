@@ -2,6 +2,7 @@
  * Defines the [Transaction] type that performs multiple [Operation]s with ACID properties.
 */
 
+use futures::StreamExt;
 use object_store::path::Path;
 use uuid::Uuid;
 
@@ -21,7 +22,6 @@ pub struct Transaction<'table> {
 impl<'table> Transaction<'table> {
     /// Create a transaction for the given table.
     pub fn new(table: &'table mut Table) -> Self {
-        table.increment_sequence_number();
         Transaction {
             table,
             operations: vec![],
@@ -37,14 +37,27 @@ impl<'table> Transaction<'table> {
         self.operations.push(Operation::UpdateSpec(spec_id));
         self
     }
+    /// Quickly append files to the table
+    pub fn fast_append(mut self, files: Vec<String>) -> Self {
+        self.operations.push(Operation::NewFastAppend(files));
+        self
+    }
     /// Commit the transaction to perform the [Operation]s with ACID guarantees.
     pub async fn commit(self) -> Result<()> {
-        let table = self.operations.into_iter().fold(self.table, |table, op| {
-            op.execute(table);
-            table
-        });
-        match (table.catalog(), table.identifier(), table.object_store()) {
-            (Some(catalog), Some(identifier), _) => {
+        self.table.increment_sequence_number();
+        self.table.new_snapshot();
+        let table = futures::stream::iter(self.operations)
+            .fold(
+                Ok::<&mut Table, anyhow::Error>(self.table),
+                |table, op| async move {
+                    let table = table?;
+                    op.execute(table).await?;
+                    Ok(table)
+                },
+            )
+            .await?;
+        match (table.catalog(), table.identifier()) {
+            (Some(catalog), Some(identifier)) => {
                 let object_store = catalog.object_store();
                 let location = &table.metadata().location;
                 let transaction_uuid = Uuid::new_v4();
@@ -74,7 +87,8 @@ impl<'table> Transaction<'table> {
                 *table = new_table;
                 Ok(())
             }
-            (_, _, Some(object_store)) => {
+            (_, _) => {
+                let object_store = table.object_store();
                 let location = &table.metadata().location;
                 let uuid = Uuid::new_v4();
                 let version = &table.metadata().last_sequence_number;
@@ -100,13 +114,10 @@ impl<'table> Transaction<'table> {
                     .delete(&temp_path)
                     .await
                     .map_err(|err| anyhow!(err.to_string()))?;
-                let new_table = Table::load_file_system_table(location, object_store).await?;
+                let new_table = Table::load_file_system_table(location, &object_store).await?;
                 *table = new_table;
                 Ok(())
             }
-            (_, _, _) => Err(anyhow!(
-                "Table can't be both a filesystem and a metastore table."
-            )),
         }
     }
 }
