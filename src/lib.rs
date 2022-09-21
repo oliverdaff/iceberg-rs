@@ -23,3 +23,6 @@ pub mod table;
 pub mod transaction;
 
 pub use object_store;
+
+#[cfg(feature = "datafusion")]
+pub mod datafusion;
