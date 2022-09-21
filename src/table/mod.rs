@@ -11,6 +11,7 @@ use object_store::{path::Path, ObjectStore};
 use crate::{
     catalog::{table_identifier::TableIdentifier, Catalog},
     model::{
+        schema::SchemaV2,
         snapshot::{SnapshotV2, Summary},
         table::TableMetadataV2,
     },
@@ -127,6 +128,16 @@ impl Table {
             TableType::FileSystem(object_store) => Arc::clone(object_store),
             TableType::Metastore(_, catalog) => catalog.object_store(),
         }
+    }
+    /// Get the metadata of the table
+    pub fn schema(&self) -> &SchemaV2 {
+        &self
+            .metadata
+            .schemas
+            .iter()
+            .filter(|schema| schema.schema_id == self.metadata.current_schema_id)
+            .next()
+            .unwrap()
     }
     /// Get the metadata of the table
     pub fn metadata(&self) -> &TableMetadataV2 {

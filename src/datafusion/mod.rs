@@ -17,6 +17,8 @@ use futures::Future;
 
 use crate::table::Table;
 
+mod schema;
+
 /// Iceberg table for datafusion
 pub struct DataFusionTable(Table);
 
@@ -46,7 +48,7 @@ impl TableProvider for DataFusionTable {
         self
     }
     fn schema(&self) -> SchemaRef {
-        unimplemented!()
+        Arc::new(self.0.schema().try_into().unwrap())
     }
     fn table_type(&self) -> TableType {
         unimplemented!()
