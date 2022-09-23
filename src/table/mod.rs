@@ -49,8 +49,9 @@ impl Table {
         metadata_location: &str,
     ) -> Result<Self> {
         let manifests = get_manifests(&metadata, catalog.object_store())
-            .await?
-            .collect::<Result<Vec<_>>>()?;
+            .await
+            .and_then(|x| x.collect::<Result<Vec<_>>>())
+            .unwrap_or(Vec::new());
         Ok(Table {
             table_type: TableType::Metastore(identifier, catalog),
             metadata,
@@ -110,8 +111,9 @@ impl Table {
         )
         .map_err(|err| anyhow!(err.to_string()))?;
         let manifests = get_manifests(&metadata, Arc::clone(object_store))
-            .await?
-            .collect::<Result<Vec<_>>>()?;
+            .await
+            .and_then(|x| x.collect::<Result<Vec<_>>>())
+            .unwrap_or(Vec::new());
         Ok(Table {
             metadata,
             table_type: TableType::FileSystem(Arc::clone(object_store)),

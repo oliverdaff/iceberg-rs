@@ -3,7 +3,7 @@
 */
 use std::{
     io::Cursor,
-    iter::Map,
+    iter::{repeat, FilterMap, Map, Zip},
     pin::Pin,
     slice::Iter,
     sync::Arc,
@@ -20,14 +20,48 @@ use crate::model::{manifest::ManifestEntry, manifest_list::ManifestFile};
 use super::Table;
 
 impl Table {
-    /// Get files associated to a table
-    pub async fn files(&self) -> Result<impl Stream<Item = Result<ManifestEntry>> + '_> {
-        let manifests = self.manifests();
+    /// Get a stream of files associated to a table. The files are returned based on the list of manifest files associated to the table.
+    /// The included manifest files can be filtered based on an filter vector. The filter vector has the length equal to the number of manifest files
+    /// and contains a true entry everywhere the manifest file is to be included in the output.
+    pub async fn files<'file>(
+        &self,
+        filter: Option<Vec<bool>>,
+    ) -> Result<impl Stream<Item = Result<ManifestEntry>> + '_> {
+        let manifests = match filter {
+            Some(predicate) => {
+                self.manifests()
+                    .iter()
+                    .zip(Box::new(predicate.into_iter())
+                        as Box<dyn Iterator<Item = bool> + Send + Sync>)
+                    .filter_map(
+                        filter_manifest
+                            as fn((&'file ManifestFile, bool)) -> Option<&'file ManifestFile>,
+                    )
+            }
+            None => self
+                .manifests()
+                .iter()
+                .zip(Box::new(repeat(true)) as Box<dyn Iterator<Item = bool> + Send + Sync>)
+                .filter_map(
+                    filter_manifest
+                        as fn((&'file ManifestFile, bool)) -> Option<&'file ManifestFile>,
+                ),
+        };
         Ok(DataFileStream {
             object_store: self.object_store(),
-            manifest_list_iter: manifests.iter(),
+            manifest_list_iter: manifests,
             manifest_iter: None,
         })
+    }
+}
+
+fn filter_manifest<'list>(
+    (manifest, predicate): (&'list ManifestFile, bool),
+) -> Option<&'list ManifestFile> {
+    if predicate {
+        Some(manifest)
+    } else {
+        None
     }
 }
 
@@ -42,7 +76,10 @@ fn avro_value_to_manifest_entry(
 /// Iterator over all files in a given snapshot
 pub struct DataFileStream<'list, 'manifest> {
     object_store: Arc<dyn ObjectStore>,
-    manifest_list_iter: Iter<'list, ManifestFile>,
+    manifest_list_iter: FilterMap<
+        Zip<Iter<'list, ManifestFile>, Box<dyn Iterator<Item = bool> + Send + Sync>>,
+        fn((&'list ManifestFile, bool)) -> Option<&'list ManifestFile>,
+    >,
     manifest_iter: Option<
         Map<
             Reader<'manifest, Cursor<Vec<u8>>>,
@@ -157,7 +194,7 @@ mod tests {
             .await
             .unwrap();
         let mut files = table
-            .files()
+            .files(None)
             .await
             .unwrap()
             .map(|manifest_entry| manifest_entry.map(|x| x.data_file.file_path));
