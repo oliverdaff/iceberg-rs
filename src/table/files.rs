@@ -5,11 +5,12 @@ use std::{
     io::Cursor,
     iter::Map,
     pin::Pin,
+    slice::Iter,
     sync::Arc,
     task::{Context, Poll},
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use apache_avro::{types::Value, Reader};
 use futures::{Future, Stream, TryFutureExt};
 use object_store::{path::Path, ObjectStore};
@@ -20,44 +21,14 @@ use super::Table;
 
 impl Table {
     /// Get files associated to a table
-    pub async fn files(&self) -> Result<impl Stream<Item = Result<ManifestEntry>>> {
-        let snapshot = if let Some(snapshots) = &self.metadata().snapshots {
-            Ok(snapshots.last().unwrap())
-        } else {
-            Err(anyhow!("No snapshots in this table."))
-        }?;
-        let object_store = self.object_store();
-        let path: Path = snapshot.manifest_list.clone().into();
-        {
-            let bytes: Cursor<Vec<u8>> = Cursor::new(
-                object_store
-                    .get(&path)
-                    .await
-                    .map_err(anyhow::Error::msg)?
-                    .bytes()
-                    .await?
-                    .into(),
-            );
-            let reader = apache_avro::Reader::new(bytes)?;
-            let map = reader.map(
-                avro_value_to_manifest_file
-                    as fn(
-                        Result<Value, apache_avro::Error>,
-                    ) -> Result<ManifestFile, apache_avro::Error>,
-            );
-            Ok(ManifestStream {
-                object_store: self.object_store(),
-                manifest_list_iter: map,
-                manifest_iter: None,
-            })
-        }
+    pub async fn files(&self) -> Result<impl Stream<Item = Result<ManifestEntry>> + '_> {
+        let manifests = self.manifests();
+        Ok(DataFileStream {
+            object_store: self.object_store(),
+            manifest_list_iter: manifests.iter(),
+            manifest_iter: None,
+        })
     }
-}
-
-fn avro_value_to_manifest_file(
-    entry: Result<Value, apache_avro::Error>,
-) -> Result<ManifestFile, apache_avro::Error> {
-    entry.and_then(|value| apache_avro::from_value(&value))
 }
 
 fn avro_value_to_manifest_entry(
@@ -69,12 +40,9 @@ fn avro_value_to_manifest_entry(
 }
 
 /// Iterator over all files in a given snapshot
-pub struct ManifestStream<'list, 'manifest> {
+pub struct DataFileStream<'list, 'manifest> {
     object_store: Arc<dyn ObjectStore>,
-    manifest_list_iter: Map<
-        Reader<'list, Cursor<Vec<u8>>>,
-        fn(Result<Value, apache_avro::Error>) -> Result<ManifestFile, apache_avro::Error>,
-    >,
+    manifest_list_iter: Iter<'list, ManifestFile>,
     manifest_iter: Option<
         Map<
             Reader<'manifest, Cursor<Vec<u8>>>,
@@ -83,7 +51,7 @@ pub struct ManifestStream<'list, 'manifest> {
     >,
 }
 
-impl<'list, 'manifest> Stream for ManifestStream<'list, 'manifest> {
+impl<'list, 'manifest> Stream for DataFileStream<'list, 'manifest> {
     type Item = Result<ManifestEntry>;
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let next = match &mut self.manifest_iter {
@@ -94,31 +62,28 @@ impl<'list, 'manifest> Stream for ManifestStream<'list, 'manifest> {
             None => {
                 let next = self.manifest_list_iter.next();
                 match next {
-                    Some(file) => match file {
-                        Ok(file) => {
-                            let object_store = Arc::clone(&self.object_store);
-                            let path: Path = file.manifest_path.clone().into();
-                            let result = object_store.get(&path).and_then(|file| file.bytes());
-                            let temp = match Pin::as_mut(&mut Box::pin(result)).poll(cx) {
-                                Poll::Ready(file) => {
-                                    let bytes = Cursor::new(Vec::from(file?));
-                                    let mut reader = apache_avro::Reader::new(bytes)?;
-                                    let next = reader.next();
-                                    self.manifest_iter = Some(reader.map(
-                                        avro_value_to_manifest_entry
-                                            as fn(
-                                                Result<Value, apache_avro::Error>,
-                                            )
-                                                -> Result<ManifestEntry, anyhow::Error>,
-                                    ));
-                                    Poll::Ready(next.map(avro_value_to_manifest_entry))
-                                }
-                                Poll::Pending => Poll::Pending,
-                            };
-                            temp
-                        }
-                        Err(err) => Poll::Ready(Some(Err(anyhow::Error::msg(err)))),
-                    },
+                    Some(file) => {
+                        let object_store = Arc::clone(&self.object_store);
+                        let path: Path = file.manifest_path.clone().into();
+                        let result = object_store.get(&path).and_then(|file| file.bytes());
+                        let temp = match Pin::as_mut(&mut Box::pin(result)).poll(cx) {
+                            Poll::Ready(file) => {
+                                let bytes = Cursor::new(Vec::from(file?));
+                                let mut reader = apache_avro::Reader::new(bytes)?;
+                                let next = reader.next();
+                                self.manifest_iter = Some(reader.map(
+                                    avro_value_to_manifest_entry
+                                        as fn(
+                                            Result<Value, apache_avro::Error>,
+                                        )
+                                            -> Result<ManifestEntry, anyhow::Error>,
+                                ));
+                                Poll::Ready(next.map(avro_value_to_manifest_entry))
+                            }
+                            Poll::Pending => Poll::Pending,
+                        };
+                        temp
+                    }
                     None => Poll::Ready(None),
                 }
             }

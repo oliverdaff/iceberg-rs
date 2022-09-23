@@ -2,15 +2,17 @@
 Defining the [Table] struct that represents an iceberg table.
 */
 
-use std::{collections::HashMap, sync::Arc, time::SystemTime};
+use std::{collections::HashMap, io::Cursor, sync::Arc, time::SystemTime};
 
 use anyhow::{anyhow, Result};
+use apache_avro::types::Value;
 use futures::StreamExt;
 use object_store::{path::Path, ObjectStore};
 
 use crate::{
     catalog::{table_identifier::TableIdentifier, Catalog},
     model::{
+        manifest_list::ManifestFile,
         schema::SchemaV2,
         snapshot::{SnapshotV2, Summary},
         table::TableMetadataV2,
@@ -34,22 +36,27 @@ pub struct Table {
     table_type: TableType,
     metadata: TableMetadataV2,
     metadata_location: String,
+    manifests: Vec<ManifestFile>,
 }
 
 /// Public interface of the table.
 impl Table {
     /// Create a new metastore Table
-    pub fn new_metastore_table(
+    pub async fn new_metastore_table(
         identifier: TableIdentifier,
         catalog: Arc<dyn Catalog>,
         metadata: TableMetadataV2,
         metadata_location: &str,
-    ) -> Self {
-        Table {
+    ) -> Result<Self> {
+        let manifests = get_manifests(&metadata, catalog.object_store())
+            .await?
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Table {
             table_type: TableType::Metastore(identifier, catalog),
             metadata,
             metadata_location: metadata_location.to_string(),
-        }
+            manifests,
+        })
     }
     /// Load a filesystem table from an objectstore
     pub async fn load_file_system_table(
@@ -102,10 +109,14 @@ impl Table {
             std::str::from_utf8(bytes).map_err(|err| anyhow!(err.to_string()))?,
         )
         .map_err(|err| anyhow!(err.to_string()))?;
+        let manifests = get_manifests(&metadata, Arc::clone(object_store))
+            .await?
+            .collect::<Result<Vec<_>>>()?;
         Ok(Table {
             metadata,
             table_type: TableType::FileSystem(Arc::clone(object_store)),
             metadata_location,
+            manifests,
         })
     }
     /// Get the table identifier in the catalog. Returns None of it is a filesystem table.
@@ -146,6 +157,10 @@ impl Table {
     /// Get the location of the current metadata file
     pub fn metadata_location(&self) -> &str {
         &self.metadata_location
+    }
+    /// Get the location of the current metadata file
+    pub fn manifests(&self) -> &[ManifestFile] {
+        &self.manifests
     }
     /// Create a new transaction for this table
     pub fn new_transaction(&mut self) -> Transaction {
@@ -190,6 +205,43 @@ impl Table {
             self.metadata.current_snapshot_id = Some(0i64)
         }
     }
+}
+
+pub(crate) async fn get_manifests(
+    metadata: &TableMetadataV2,
+    object_store: Arc<dyn ObjectStore>,
+) -> Result<impl Iterator<Item = Result<ManifestFile>>> {
+    let snapshot = if let Some(snapshots) = &metadata.snapshots {
+        Ok(snapshots.last().unwrap())
+    } else {
+        Err(anyhow!("No snapshots in this table."))
+    }?;
+    let path: Path = snapshot.manifest_list.clone().into();
+    {
+        let bytes: Cursor<Vec<u8>> = Cursor::new(
+            object_store
+                .get(&path)
+                .await
+                .map_err(anyhow::Error::msg)?
+                .bytes()
+                .await?
+                .into(),
+        );
+        let reader = apache_avro::Reader::new(bytes)?;
+        let map = reader.map(
+            avro_value_to_manifest_file
+                as fn(Result<Value, apache_avro::Error>) -> Result<ManifestFile, anyhow::Error>,
+        );
+        Ok(map)
+    }
+}
+
+fn avro_value_to_manifest_file(
+    entry: Result<Value, apache_avro::Error>,
+) -> Result<ManifestFile, anyhow::Error> {
+    entry
+        .and_then(|value| apache_avro::from_value(&value))
+        .map_err(anyhow::Error::msg)
 }
 
 #[cfg(test)]
