@@ -2,21 +2,30 @@
  * Tableprovider to use iceberg table with datafusion.
 */
 
-use std::{any::Any, ops::DerefMut, pin::Pin, sync::Arc};
+use anyhow::Result;
+use futures::TryStreamExt;
+use std::{any::Any, collections::HashMap, ops::DerefMut, sync::Arc};
 
 use datafusion::{
     arrow::datatypes::SchemaRef,
     common::DataFusionError,
-    datasource::TableProvider,
+    datasource::{listing::PartitionedFile, object_store::ObjectStoreUrl, TableProvider},
     execution::context::SessionState,
-    logical_expr::{TableProviderFilterPushDown, TableType},
-    logical_plan::Expr,
-    physical_plan::ExecutionPlan,
+    logical_expr::TableType,
+    logical_plan::{combine_filters, Expr},
+    physical_optimizer::pruning::PruningPredicate,
+    physical_plan::{file_format::FileScanConfig, ExecutionPlan},
+    scalar::ScalarValue,
 };
-use futures::Future;
+use url::Url;
 
-use crate::table::Table;
+use crate::{
+    datafusion::pruning_statistics::{PruneDataFiles, PruneManifests},
+    model::manifest::ManifestEntry,
+    table::Table,
+};
 
+mod pruning_statistics;
 mod schema;
 
 /// Iceberg table for datafusion
@@ -51,38 +60,60 @@ impl TableProvider for DataFusionTable {
         Arc::new(self.0.schema().try_into().unwrap())
     }
     fn table_type(&self) -> TableType {
-        unimplemented!()
+        TableType::Base
     }
-    fn scan<'life0, 'life1, 'life2, 'life3, 'async_trait>(
-        &'life0 self,
-        ctx: &'life1 SessionState,
-        projection: &'life2 Option<Vec<usize>>,
-        filters: &'life3 [Expr],
-        limit: Option<usize>,
-    ) -> Pin<
-        Box<
-            dyn Future<Output = Result<Arc<dyn ExecutionPlan>, DataFusionError>>
-                + Send
-                + 'async_trait,
-        >,
-    >
-    where
-        'life0: 'async_trait,
-        'life1: 'async_trait,
-        'life2: 'async_trait,
-        'life3: 'async_trait,
-        Self: 'async_trait,
-    {
-        unimplemented!()
-    }
-
-    fn get_table_definition(&self) -> Option<&str> {
-        unimplemented!()
-    }
-    fn supports_filter_pushdown(
+    async fn scan(
         &self,
-        _filter: &Expr,
-    ) -> Result<TableProviderFilterPushDown, DataFusionError> {
+        session: &SessionState,
+        projection: &Option<Vec<usize>>,
+        filters: &[Expr],
+        limit: Option<usize>,
+    ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
+        let schema = self.schema();
+
+        let object_store_url = ObjectStoreUrl::parse(&self.metadata().location)?;
+        let url: &Url = object_store_url.as_ref();
+        session.runtime_env.register_object_store(
+            url.scheme(),
+            url.host_str().unwrap_or_default(),
+            self.0.object_store(),
+        );
+
+        let mut file_groups: HashMap<Vec<ScalarValue>, Vec<PartitionedFile>> = HashMap::new();
+        if let Some(Some(predicate)) = (!filters.is_empty()).then_some(combine_filters(filters)) {
+            let pruning_predicate = PruningPredicate::try_new(predicate, schema.clone())?;
+            let manifests_to_prune = pruning_predicate.prune(&PruneManifests::from(self))?;
+            let files = self
+                .files(Some(manifests_to_prune))
+                .await
+                .map_err(|err| DataFusionError::Internal(format!("{}", err)))?
+                .try_collect::<Vec<_>>()
+                .await
+                .map_err(|err| DataFusionError::Internal(format!("{}", err)))?;
+            let files_to_prune = pruning_predicate.prune(&PruneDataFiles::new(self, &files))?;
+            files
+                .into_iter()
+                .zip(files_to_prune.into_iter())
+                .for_each(|(manifest, prune_file)| {
+                    if !prune_file {
+                        // let part = partitioned_file_from_action(action, &schema);
+                        // file_groups
+                        //     .entry(part.partition_values.clone())
+                        //     .or_default()
+                        //     .push(part);
+                    };
+                });
+        } else {
+            // self.get_state().files().iter().for_each(|action| {
+            //     let part = partitioned_file_from_action(action, &schema);
+            //     file_groups
+            //         .entry(part.partition_values.clone())
+            //         .or_default()
+            //         .push(part);
+            // });
+        };
+
+        // let file_scan_config = FileScanConfig { object_store_url };
         unimplemented!()
     }
 }

@@ -2,6 +2,8 @@
  * Convert between datafusion and iceberh schema
 */
 
+use anyhow::{anyhow, Result};
+
 use std::collections::HashMap;
 
 use datafusion::arrow::datatypes::{DataType, Field, Schema, TimeUnit};
@@ -104,6 +106,35 @@ impl TryFrom<&AllType> for DataType {
                 )),
                 false,
             )),
+        }
+    }
+}
+
+impl TryFrom<&DataType> for AllType {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &DataType) -> Result<Self, Self::Error> {
+        match value {
+            DataType::Boolean => Ok(AllType::Primitive(PrimitiveType::Boolean)),
+            DataType::Int32 => Ok(AllType::Primitive(PrimitiveType::Int)),
+            DataType::Int64 => Ok(AllType::Primitive(PrimitiveType::Long)),
+            DataType::Float32 => Ok(AllType::Primitive(PrimitiveType::Float)),
+            DataType::Float64 => Ok(AllType::Primitive(PrimitiveType::Double)),
+            DataType::Decimal128(precision, scale) => {
+                Ok(AllType::Primitive(PrimitiveType::Decimal {
+                    precision: *precision as i32,
+                    scale: *scale,
+                }))
+            }
+            DataType::Date64 => Ok(AllType::Primitive(PrimitiveType::Date)),
+            DataType::Time64(_) => Ok(AllType::Primitive(PrimitiveType::Time)),
+            DataType::Timestamp(_, _) => Ok(AllType::Primitive(PrimitiveType::Timestamp)),
+            DataType::Utf8 => Ok(AllType::Primitive(PrimitiveType::String)),
+            DataType::FixedSizeBinary(len) => {
+                Ok(AllType::Primitive(PrimitiveType::Fixed(*len as u64)))
+            }
+            DataType::Binary => Ok(AllType::Primitive(PrimitiveType::Binary)),
+            _ => Err(anyhow!("Other arrow datatypes not supported")),
         }
     }
 }

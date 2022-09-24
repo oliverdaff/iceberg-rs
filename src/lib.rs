@@ -24,5 +24,5 @@ pub mod transaction;
 
 pub use object_store;
 
-#[cfg(feature = "datafusion")]
+#[cfg(feature = "datafusion-ext")]
 pub mod datafusion;

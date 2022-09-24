@@ -62,6 +62,7 @@ let data = r#"
 ```
 
 */
+pub(crate) mod bytes;
 pub mod decimal;
 pub mod manifest;
 pub mod manifest_list;
