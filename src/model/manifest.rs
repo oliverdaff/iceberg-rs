@@ -1,18 +1,21 @@
 /*!
 Manifest files
 */
-use std::{collections::HashMap, io::Read};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt,
+};
 
 use anyhow::{anyhow, Context, Result};
-use apache_avro::{
-    types::{Record, Value},
-    Reader, Schema,
+use serde::{
+    de::{DeserializeOwned, MapAccess, Visitor},
+    ser::{SerializeSeq, SerializeStruct},
+    Deserialize, Deserializer, Serialize,
 };
-use serde::{de::DeserializeOwned, ser::SerializeSeq, Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use super::partition::PartitionField;
+use super::{partition::PartitionSpec, schema::SchemaV2, types::Value};
 
 /// Details of a manifest file
 pub struct Manifest {
@@ -55,7 +58,7 @@ pub enum Status {
 }
 
 /// Entry in manifest.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct ManifestEntry {
     /// Used to track additions and deletions
     pub status: Status,
@@ -109,75 +112,6 @@ impl ManifestEntry {
                 }
             ]
         }"#
-    }
-    /// Turn manifest entry into a record.
-    pub fn into_record<'schema>(
-        self,
-        schema: &'schema Schema,
-        partition_spec_name: &str,
-    ) -> Result<Record<'schema>> {
-        let mut record =
-            Record::new(schema).ok_or_else(|| anyhow!("Failed to create Record with schema."))?;
-        let value = apache_avro::to_value(self)?;
-        if let Value::Record(mut my_manifest_entry) = value {
-            my_manifest_entry
-                .iter_mut()
-                .filter(|x| x.0 == "data_file")
-                .for_each(|(_, data_file)| {
-                    if let Value::Record(ref mut my_data_file) = data_file {
-                        my_data_file
-                            .iter_mut()
-                            .filter(|y| y.0 == "partition")
-                            .for_each(|(_, partition)| {
-                                if let Value::Record(ref mut my_record) = partition {
-                                    my_record
-                                        .iter_mut()
-                                        .filter(|z| z.0 == "partition_spec_name")
-                                        .for_each(|(name, _)| {
-                                            *name = partition_spec_name.to_string();
-                                        })
-                                }
-                            })
-                    }
-                });
-            for (key, value) in my_manifest_entry {
-                record.put(&key, value)
-            }
-            Ok(record)
-        } else {
-            Err(anyhow!("ManifestEntry is not a record."))
-        }
-    }
-}
-
-impl TryFrom<Value> for ManifestEntry {
-    type Error = anyhow::Error;
-
-    fn try_from(mut value: Value) -> Result<Self, Self::Error> {
-        if let Value::Record(ref mut my_manifest_entry) = value {
-            my_manifest_entry
-                .iter_mut()
-                .filter(|x| x.0 == "data_file")
-                .for_each(|(_, data_file)| {
-                    if let Value::Record(ref mut my_data_file) = data_file {
-                        my_data_file
-                            .iter_mut()
-                            .filter(|y| y.0 == "partition")
-                            .for_each(|(_, partition)| {
-                                if let Value::Record(ref mut my_record) = partition {
-                                    if my_record.len() == 1 {
-                                        if let Some((name, _)) = my_record.get_mut(0) {
-                                            *name = "partition_spec_name".to_string();
-                                        }
-                                    }
-                                }
-                            })
-                    }
-                });
-            apache_avro::from_value::<ManifestEntry>(&value).map_err(anyhow::Error::msg)
-        } else {
-            Err(anyhow!("ManifestEntry is not a record."))
-        }
     }
 }
 
@@ -244,42 +178,126 @@ impl<'de> Deserialize<'de> for FileFormat {
 /// The partition struct stores the tuple of partition values for each file.
 /// Its type is derived from the partition fields of the partition spec used to write the manifest file.
 /// In v2, the partition struct’s field ids must match the ids from the partition spec.
-/// The schema of the partition tuples is different for different partition specs.
-/// To achieve a constant scheme for the rust struct, this create uses aliasing.
-/// But this means that the schema for reading and writing are different.
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct PartitionStruct {
-    pub(crate) partition_spec_name: Option<i64>,
+#[derive(Debug, Clone, PartialEq)]
+pub struct PartitionValues {
+    fields: Vec<Option<Value>>,
+    lookup: BTreeMap<String, usize>,
 }
 
-impl PartitionStruct {
-    /// Get the schema for reading the PartitionStruct based on the PartitionSpec. It is deduced from the writers schema.
-    pub fn read_schema<R: Read>(reader: R) -> Result<String> {
-        let reader = Reader::new(reader)?;
-        let metadata = reader.user_metadata();
-        let partition_specs: Vec<PartitionField> = serde_json::from_slice(
-            &metadata
-                .get("partition-spec")
-                .ok_or_else(|| anyhow!("No partition spec in metadata."))?
-                .to_vec(),
-        )?;
-        let partition_spec_id: i32 = serde_json::from_slice(
-            &metadata
-                .get("partition-spec-id")
-                .ok_or_else(|| anyhow!("No partition spec in metadata."))?
-                .to_vec(),
-        )?;
-        Ok(
-            r#"{"type": "record","name": "r102","fields": [{"name": ""#.to_owned()
-                + &partition_specs[partition_spec_id as usize].name
-                + r#"", "type":  ["null","long"], "aliases": ["partition_spec_name"], "default": null}]}"#,
-        )
+impl PartitionValues {
+    /// Get the schema of the partition value struct depending on the partition spec and the table schema
+    pub fn schema(spec: &PartitionSpec, table_schema: &SchemaV2) -> Result<String> {
+        Ok(spec
+            .fields
+            .iter()
+            .map(|field| {
+                let schema_field = table_schema
+                    .struct_fields
+                    .get(field.source_id as usize)
+                    .ok_or_else(|| anyhow!("Column {} not in table schema.", &field.source_id))?;
+                Ok::<_, anyhow::Error>(
+                    r#"
+                {
+                    "name": ""#
+                        .to_owned()
+                        + &field.name
+                        + r#"", 
+                    "type":  ["null",""#
+                        + &format!("{}", &schema_field.field_type)
+                        + r#""],
+                    "default": null
+                },"#,
+                )
+            })
+            .fold(
+                Ok::<String, anyhow::Error>(
+                    r#"{"type": "record","name": "r102","fields": ["#.to_owned(),
+                ),
+                |acc, x| {
+                    let result = acc? + &x?;
+                    Ok(result)
+                },
+            )?
+            .trim_end_matches(",")
+            .to_owned()
+            + r#"]}"#)
     }
-    /// Get the schema for writing the PartitionStruct
-    pub fn write_schema(partition_spec_name: &str) -> String {
-        r#"{"type": "record","name": "r102","fields": [{"name": ""#.to_owned()
-            + partition_spec_name
-            + r#"", "type":  ["null","long"], "aliases": ["partition_spec_name"], "default": null}]}"#
+    /// Iterate over values
+    pub fn iter(&self) -> std::slice::Iter<'_, Option<Value>> {
+        self.fields.iter()
+    }
+}
+
+impl FromIterator<(String, Option<Value>)> for PartitionValues {
+    fn from_iter<I: IntoIterator<Item = (String, Option<Value>)>>(iter: I) -> Self {
+        let mut fields = Vec::new();
+        let mut lookup = BTreeMap::new();
+
+        for (i, (key, value)) in iter.into_iter().enumerate() {
+            fields.push(value);
+            lookup.insert(key, i);
+        }
+
+        PartitionValues { fields, lookup }
+    }
+}
+
+impl Serialize for PartitionValues {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut record = serializer.serialize_struct("r102", self.fields.len())?;
+        for (i, value) in self.fields.iter().enumerate() {
+            let (key, _) = self
+                .lookup
+                .iter()
+                .filter(|(_, value)| **value == i)
+                .next()
+                .unwrap();
+            record.serialize_field(Box::leak(key.clone().into_boxed_str()), value)?;
+        }
+        record.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for PartitionValues {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct PartitionStructVisitor;
+
+        impl<'de> Visitor<'de> for PartitionStructVisitor {
+            type Value = PartitionValues;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("map")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<PartitionValues, V::Error>
+            where
+                V: MapAccess<'de>,
+            {
+                let mut fields: Vec<Option<Value>> = Vec::new();
+                let mut lookup: BTreeMap<String, usize> = BTreeMap::new();
+                let mut index = 0;
+                while let Some(key) = map.next_key()? {
+                    fields.push(map.next_value()?);
+                    lookup.insert(key, index);
+                    index += 1;
+                }
+                Ok(PartitionValues {
+                    fields,
+                    lookup: lookup,
+                })
+            }
+        }
+        deserializer.deserialize_struct(
+            "r102",
+            Box::leak(vec![].into_boxed_slice()),
+            PartitionStructVisitor,
+        )
     }
 }
 
@@ -334,7 +352,7 @@ impl<'de, T: Serialize + DeserializeOwned + Clone> Deserialize<'de> for AvroMap<
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 /// DataFile found in Manifest.
 pub struct DataFile {
     ///Type of content in data file.
@@ -344,7 +362,7 @@ pub struct DataFile {
     /// String file format name, avro, orc or parquet
     pub file_format: FileFormat,
     /// Partition data tuple, schema based on the partition spec output using partition field ids for the struct field ids
-    pub partition: PartitionStruct,
+    pub partition: PartitionValues,
     /// Number of records in this file
     pub record_count: i64,
     /// Total file size in bytes
@@ -741,13 +759,18 @@ fn read_manifest_entry<R: std::io::Read>(
         .into_iter()
         .next()
         .context("Manifest Entry Expected")??;
-    record.try_into()
+    apache_avro::from_value::<ManifestEntry>(&record).map_err(anyhow::Error::msg)
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::model::{
+        partition::{PartitionField, Transform},
+        schema::{AllType, PrimitiveType, Struct, StructField},
+    };
+
     use super::*;
-    use apache_avro::{self, types::Value};
+    use apache_avro::{self, types::Value as AvroValue};
     use proptest::prelude::*;
 
     fn status_strategy() -> impl Strategy<Value = Status> {
@@ -771,9 +794,7 @@ mod tests {
                     content: None,
                     file_path: "/".to_string(),
                     file_format: FileFormat::Parquet,
-                    partition: PartitionStruct {
-                        partition_spec_name: Some(0)
-                    },
+                    partition: PartitionValues::from_iter(vec![("ts_day".to_owned(), Some(Value::Int(1)))]),
                     record_count: 4,
                     file_size_in_bytes: 1200,
                     block_size_in_bytes: None,
@@ -798,7 +819,33 @@ mod tests {
     proptest! {
             #[test]
             fn test_manifest_entry(a in arb_manifest_entry()) {
-                let partition_schema = PartitionStruct::write_schema("date");
+
+                let table_schema = SchemaV2 {
+                    schema_id: 0,
+                    identifier_field_ids: None,
+                    name_mapping: None,
+                    struct_fields: Struct {
+                        fields: vec![StructField {
+                            id: 4,
+                            name: "day".to_owned(),
+                            required: false,
+                            field_type: AllType::Primitive(PrimitiveType::Int),
+                            doc: None,
+                        }],
+                    },
+                };
+
+                let spec = PartitionSpec {
+                    spec_id: 0,
+                    fields: vec![PartitionField {
+                        source_id: 4,
+                        field_id: 1000,
+                        name: "ts_day".to_string(),
+                        transform: Transform::Day,
+                    }],
+                };
+
+                let partition_schema = PartitionValues::schema(&spec, &table_schema).unwrap();
 
                 let raw_schema = ManifestEntry::schema(&partition_schema);
 
@@ -820,12 +867,12 @@ mod tests {
 
             let meta: std::collections::HashMap<String, apache_avro::types::Value> =
                 std::collections::HashMap::from_iter(vec![
-                    ("schema".to_string(), Value::Bytes(table_schema.into())),
-                    ("schema-id".to_string(), Value::Bytes(table_schema_id.into())),
-                    ("partition-spec".to_string(), Value::Bytes(partition_spec.into())),
-                    ("partition-spec-id".to_string(), Value::Bytes(partition_spec_id.into())),
-                    ("format-version".to_string(), Value::Bytes(format_version.into())),
-                    ("content".to_string(), Value::Bytes(content.into()))
+                    ("schema".to_string(), AvroValue::Bytes(table_schema.into())),
+                    ("schema-id".to_string(), AvroValue::Bytes(table_schema_id.into())),
+                    ("partition-spec".to_string(), AvroValue::Bytes(partition_spec.into())),
+                    ("partition-spec-id".to_string(), AvroValue::Bytes(partition_spec_id.into())),
+                    ("format-version".to_string(), AvroValue::Bytes(format_version.into())),
+                    ("content".to_string(), AvroValue::Bytes(content.into()))
                     ],
                 );
             let mut writer = apache_avro::Writer::builder()
@@ -833,21 +880,46 @@ mod tests {
             .writer(vec![])
             .user_metadata(meta)
             .build();
-            writer.append(a.clone().into_record(&schema,"date").unwrap()).unwrap();
+            writer.append_ser(a.clone()).unwrap();
 
                 let encoded = writer.into_inner().unwrap();
 
                 let reader = apache_avro::Reader::new( &encoded[..]).unwrap();
 
                 for value in reader {
-                    let entry = ManifestEntry::try_from(value.unwrap()).unwrap();
+                    let entry = apache_avro::from_value::<ManifestEntry>(&value.unwrap()).unwrap();
                     assert_eq!(a, entry)
                 }
 
             }
             #[test]
             fn test_read_manifest(a in arb_manifest_entry()) {
-            let partition_schema = PartitionStruct::write_schema("date");
+                let table_schema = SchemaV2 {
+                    schema_id: 0,
+                    identifier_field_ids: None,
+                    name_mapping: None,
+                    struct_fields: Struct {
+                        fields: vec![StructField {
+                            id: 4,
+                            name: "day".to_owned(),
+                            required: false,
+                            field_type: AllType::Primitive(PrimitiveType::Int),
+                            doc: None,
+                        }],
+                    },
+                };
+
+                let spec = PartitionSpec {
+                    spec_id: 0,
+                    fields: vec![PartitionField {
+                        source_id: 4,
+                        field_id: 1000,
+                        name: "ts_day".to_string(),
+                        transform: Transform::Day,
+                    }],
+                };
+
+                let partition_schema = PartitionValues::schema(&spec, &table_schema).unwrap();
 
             let raw_schema = ManifestEntry::schema(&partition_schema);
 
@@ -869,12 +941,12 @@ mod tests {
 
             let meta: std::collections::HashMap<String, apache_avro::types::Value> =
                 std::collections::HashMap::from_iter(vec![
-                    ("schema".to_string(), Value::Bytes(table_schema.into())),
-                    ("schema-id".to_string(), Value::Bytes(table_schema_id.into())),
-                    ("partition-spec".to_string(), Value::Bytes(partition_spec.into())),
-                    ("partition-spec-id".to_string(), Value::Bytes(partition_spec_id.into())),
-                    ("format-version".to_string(), Value::Bytes(format_version.into())),
-                    ("content".to_string(), Value::Bytes(content.into()))
+                    ("schema".to_string(), AvroValue::Bytes(table_schema.into())),
+                    ("schema-id".to_string(), AvroValue::Bytes(table_schema_id.into())),
+                    ("partition-spec".to_string(), AvroValue::Bytes(partition_spec.into())),
+                    ("partition-spec-id".to_string(), AvroValue::Bytes(partition_spec_id.into())),
+                    ("format-version".to_string(), AvroValue::Bytes(format_version.into())),
+                    ("content".to_string(), AvroValue::Bytes(content.into()))
                     ],
                 );
             let mut writer = apache_avro::Writer::builder()
@@ -882,7 +954,7 @@ mod tests {
             .writer(vec![])
             .user_metadata(meta)
             .build();
-            writer.append(a.clone().into_record(&schema,"date").unwrap()).unwrap();
+            writer.append_ser(a.clone()).unwrap();
 
             let encoded = writer.into_inner().unwrap();
 
@@ -898,7 +970,32 @@ mod tests {
     #[test]
     fn test_read_manifest_entry(a in arb_manifest_entry()) {
 
-            let partition_schema = PartitionStruct::write_schema("date");
+        let table_schema = SchemaV2 {
+            schema_id: 0,
+            identifier_field_ids: None,
+            name_mapping: None,
+            struct_fields: Struct {
+                fields: vec![StructField {
+                    id: 4,
+                    name: "day".to_owned(),
+                    required: false,
+                    field_type: AllType::Primitive(PrimitiveType::Int),
+                    doc: None,
+                }],
+            },
+        };
+
+        let spec = PartitionSpec {
+            spec_id: 0,
+            fields: vec![PartitionField {
+                source_id: 4,
+                field_id: 1000,
+                name: "ts_day".to_string(),
+                transform: Transform::Day,
+            }],
+        };
+
+        let partition_schema = PartitionValues::schema(&spec, &table_schema).unwrap();
 
             let raw_schema = ManifestEntry::schema(&partition_schema);
 
@@ -920,12 +1017,12 @@ mod tests {
 
             let meta: std::collections::HashMap<String, apache_avro::types::Value> =
                 std::collections::HashMap::from_iter(vec![
-                    ("schema".to_string(), Value::Bytes(table_schema.into())),
-                    ("schema-id".to_string(), Value::Bytes(table_schema_id.into())),
-                    ("partition-spec".to_string(), Value::Bytes(partition_spec.into())),
-                    ("partition-spec-id".to_string(), Value::Bytes(partition_spec_id.into())),
-                    ("format-version".to_string(), Value::Bytes(format_version.into())),
-                    ("content".to_string(), Value::Bytes(content.into()))
+                    ("schema".to_string(), AvroValue::Bytes(table_schema.into())),
+                    ("schema-id".to_string(), AvroValue::Bytes(table_schema_id.into())),
+                    ("partition-spec".to_string(), AvroValue::Bytes(partition_spec.into())),
+                    ("partition-spec-id".to_string(), AvroValue::Bytes(partition_spec_id.into())),
+                    ("format-version".to_string(), AvroValue::Bytes(format_version.into())),
+                    ("content".to_string(), AvroValue::Bytes(content.into()))
                     ],
                 );
             let mut writer = apache_avro::Writer::builder()
@@ -933,7 +1030,7 @@ mod tests {
             .writer(vec![])
             .user_metadata(meta)
             .build();
-            writer.append(a.clone().into_record(&schema,"date").unwrap()).unwrap();
+            writer.append_ser(a.clone()).unwrap();
 
             let encoded = writer.into_inner().unwrap();
 
@@ -945,5 +1042,53 @@ mod tests {
             assert_eq!(a.data_file.partition, metadata_entry.data_file.partition);
     }
 
+    }
+
+    #[test]
+    pub fn test_partition_values() {
+        let partition_values =
+            PartitionValues::from_iter(vec![("ts_day".to_owned(), Some(Value::Int(1)))]);
+
+        let table_schema = SchemaV2 {
+            schema_id: 0,
+            identifier_field_ids: None,
+            name_mapping: None,
+            struct_fields: Struct {
+                fields: vec![StructField {
+                    id: 4,
+                    name: "day".to_owned(),
+                    required: false,
+                    field_type: AllType::Primitive(PrimitiveType::Int),
+                    doc: None,
+                }],
+            },
+        };
+
+        let spec = PartitionSpec {
+            spec_id: 0,
+            fields: vec![PartitionField {
+                source_id: 4,
+                field_id: 1000,
+                name: "ts_day".to_string(),
+                transform: Transform::Day,
+            }],
+        };
+
+        let raw_schema = PartitionValues::schema(&spec, &table_schema).unwrap();
+
+        let schema = apache_avro::Schema::parse_str(&raw_schema).unwrap();
+
+        let mut writer = apache_avro::Writer::new(&schema, Vec::new());
+
+        writer.append_ser(partition_values.clone()).unwrap();
+
+        let encoded = writer.into_inner().unwrap();
+
+        let reader = apache_avro::Reader::new(&*encoded).unwrap();
+
+        for record in reader {
+            let result = apache_avro::from_value::<PartitionValues>(&record.unwrap()).unwrap();
+            assert_eq!(partition_values, result);
+        }
     }
 }

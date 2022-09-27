@@ -1,12 +1,13 @@
 /*!
  * Defines the different [Operation]s on a [Table].
 */
+
 use anyhow::Result;
 use object_store::path::Path;
 
 use crate::{
     model::{
-        manifest::{DataFile, FileFormat, ManifestEntry, PartitionStruct, Status},
+        manifest::{DataFile, FileFormat, ManifestEntry, PartitionValues, Status},
         manifest_list::{Content, FieldSummary, ManifestFile},
         schema::SchemaV2,
     },
@@ -60,7 +61,10 @@ impl Operation {
                     .unwrap()
                     .into();
                 let manifest_schema = apache_avro::Schema::parse_str(&ManifestEntry::schema(
-                    &PartitionStruct::write_schema("one"),
+                    &PartitionValues::schema(
+                        &table_metadata.default_spec(),
+                        table_metadata.current_schema(),
+                    )?,
                 ))?;
                 let mut manifest_writer = apache_avro::Writer::new(&manifest_schema, Vec::new());
                 for path in paths {
@@ -75,9 +79,13 @@ impl Operation {
                             content: None,
                             file_path: path,
                             file_format: FileFormat::Parquet,
-                            partition: PartitionStruct {
-                                partition_spec_name: Some(0),
-                            },
+                            partition: PartitionValues::from_iter(
+                                table_metadata
+                                    .default_spec()
+                                    .fields
+                                    .iter()
+                                    .map(|field| (field.name.to_owned(), None)),
+                            ),
                             record_count: 4,
                             file_size_in_bytes: 1200,
                             block_size_in_bytes: None,
@@ -96,7 +104,7 @@ impl Operation {
                             sort_order_id: None,
                         },
                     };
-                    manifest_writer.append(manifest_entry.into_record(&manifest_schema, "one")?)?;
+                    manifest_writer.append_ser(manifest_entry)?;
                 }
                 let manifest_bytes = manifest_writer.into_inner()?;
                 let manifest_location: Path = (manifest_list_location

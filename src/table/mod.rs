@@ -5,7 +5,7 @@ Defining the [Table] struct that represents an iceberg table.
 use std::{collections::HashMap, io::Cursor, sync::Arc, time::SystemTime};
 
 use anyhow::{anyhow, Result};
-use apache_avro::types::Value;
+use apache_avro::types::Value as AvroValue;
 use futures::StreamExt;
 use object_store::{path::Path, ObjectStore};
 
@@ -232,14 +232,14 @@ pub(crate) async fn get_manifests(
         let reader = apache_avro::Reader::new(bytes)?;
         let map = reader.map(
             avro_value_to_manifest_file
-                as fn(Result<Value, apache_avro::Error>) -> Result<ManifestFile, anyhow::Error>,
+                as fn(Result<AvroValue, apache_avro::Error>) -> Result<ManifestFile, anyhow::Error>,
         );
         Ok(map)
     }
 }
 
 fn avro_value_to_manifest_file(
-    entry: Result<Value, apache_avro::Error>,
+    entry: Result<AvroValue, apache_avro::Error>,
 ) -> Result<ManifestFile, anyhow::Error> {
     entry
         .and_then(|value| apache_avro::from_value(&value))

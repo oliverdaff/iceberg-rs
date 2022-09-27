@@ -99,6 +99,37 @@ pub struct SnapshotLog {
     pub timestamp_ms: i64,
 }
 
+impl TableMetadataV2 {
+    /// Get current schema of the table
+    pub fn current_schema(&self) -> &schema::SchemaV2 {
+        &self
+            .schemas
+            .iter()
+            .filter(|schema| schema.schema_id == self.current_schema_id)
+            .next()
+            .unwrap()
+    }
+    /// Get the default partition spec for the table
+    pub fn default_spec(&self) -> &PartitionSpec {
+        &self
+            .partition_specs
+            .iter()
+            .filter(|spec| spec.spec_id == self.default_spec_id)
+            .next()
+            .unwrap()
+    }
+    /// Get current schema of the table
+    pub fn current_snapshot(&self) -> Option<&SnapshotV2> {
+        self.current_snapshot_id.and_then(|snapshot_id| {
+            self.snapshots
+                .as_ref()?
+                .iter()
+                .filter(|snapshot| snapshot.snapshot_id == snapshot_id)
+                .next()
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use anyhow::Result;

@@ -11,7 +11,7 @@ use std::{
 };
 
 use anyhow::Result;
-use apache_avro::{types::Value, Reader};
+use apache_avro::{types::Value as AvroValue, Reader};
 use futures::{Future, Stream, TryFutureExt};
 use object_store::{path::Path, ObjectStore};
 
@@ -66,11 +66,11 @@ fn filter_manifest<'list>(
 }
 
 fn avro_value_to_manifest_entry(
-    entry: Result<Value, apache_avro::Error>,
+    entry: Result<AvroValue, apache_avro::Error>,
 ) -> Result<ManifestEntry, anyhow::Error> {
     entry
+        .and_then(|value| apache_avro::from_value(&value))
         .map_err(anyhow::Error::msg)
-        .and_then(|value| value.try_into())
 }
 
 /// Iterator over all files in a given snapshot
@@ -83,7 +83,7 @@ pub struct DataFileStream<'list, 'manifest> {
     manifest_iter: Option<
         Map<
             Reader<'manifest, Cursor<Vec<u8>>>,
-            fn(Result<Value, apache_avro::Error>) -> Result<ManifestEntry, anyhow::Error>,
+            fn(Result<AvroValue, apache_avro::Error>) -> Result<ManifestEntry, anyhow::Error>,
         >,
     >,
 }
@@ -111,7 +111,7 @@ impl<'list, 'manifest> Stream for DataFileStream<'list, 'manifest> {
                                 self.manifest_iter = Some(reader.map(
                                     avro_value_to_manifest_entry
                                         as fn(
-                                            Result<Value, apache_avro::Error>,
+                                            Result<AvroValue, apache_avro::Error>,
                                         )
                                             -> Result<ManifestEntry, anyhow::Error>,
                                 ));

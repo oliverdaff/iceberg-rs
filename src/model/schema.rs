@@ -2,6 +2,9 @@
 A table’s [schema](https://iceberg.apache.org/spec/#schemas-and-data-types) is a list of named columns, represented by [SchemaV2].
 All data types are either [primitives](PrimitiveType) or nested types, which are [Map], [List], or [Struct]. A table [SchemaV2] is also a [Struct] type.
 */
+
+use std::fmt;
+
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{
@@ -86,6 +89,30 @@ impl<'de> Deserialize<'de> for PrimitiveType {
     }
 }
 
+impl fmt::Display for PrimitiveType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PrimitiveType::Boolean => write!(f, "boolean"),
+            PrimitiveType::Int => write!(f, "int"),
+            PrimitiveType::Long => write!(f, "long"),
+            PrimitiveType::Float => write!(f, "float"),
+            PrimitiveType::Double => write!(f, "double"),
+            PrimitiveType::Decimal {
+                precision: _,
+                scale: _,
+            } => write!(f, "decimal"),
+            PrimitiveType::Date => write!(f, "date"),
+            PrimitiveType::Time => write!(f, "time"),
+            PrimitiveType::Timestamp => write!(f, "timestamp"),
+            PrimitiveType::Timestampz => write!(f, "timestampz"),
+            PrimitiveType::String => write!(f, "string"),
+            PrimitiveType::Uuid => write!(f, "uuid"),
+            PrimitiveType::Fixed(_) => write!(f, "fixed"),
+            PrimitiveType::Binary => write!(f, "binary"),
+        }
+    }
+}
+
 /// Parsing for the Decimal PrimitiveType
 fn deserialize_decimal<'de, D>(deserializer: D) -> Result<PrimitiveType, D::Error>
 where
@@ -160,6 +187,17 @@ pub enum AllType {
     Map(Map),
 }
 
+impl fmt::Display for AllType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AllType::Primitive(primitive) => write!(f, "{}", primitive),
+            AllType::Struct(_) => write!(f, "struct"),
+            AllType::List(_) => write!(f, "list"),
+            AllType::Map(_) => write!(f, "map"),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type")]
 /// A struct is a tuple of typed values. Each field in the tuple is
@@ -170,6 +208,16 @@ pub enum AllType {
 pub struct Struct {
     /// The fields of the struct.
     pub fields: Vec<StructField>,
+}
+
+impl Struct {
+    /// Get structfield at certain index
+    pub fn get(&self, index: usize) -> Option<&StructField> {
+        self.fields
+            .iter()
+            .filter(|field| field.id as usize == index)
+            .next()
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]

@@ -3,13 +3,20 @@
 */
 
 use anyhow::Result;
+use chrono::{naive::NaiveDateTime, DateTime, Utc};
 use futures::TryStreamExt;
+use object_store::ObjectMeta;
 use std::{any::Any, collections::HashMap, ops::DerefMut, sync::Arc};
 
 use datafusion::{
     arrow::datatypes::SchemaRef,
     common::DataFusionError,
-    datasource::{listing::PartitionedFile, object_store::ObjectStoreUrl, TableProvider},
+    datasource::{
+        file_format::{parquet::ParquetFormat, FileFormat},
+        listing::PartitionedFile,
+        object_store::ObjectStoreUrl,
+        TableProvider,
+    },
     execution::context::SessionState,
     logical_expr::TableType,
     logical_plan::{combine_filters, Expr},
@@ -21,12 +28,13 @@ use url::Url;
 
 use crate::{
     datafusion::pruning_statistics::{PruneDataFiles, PruneManifests},
-    model::manifest::ManifestEntry,
     table::Table,
 };
 
 mod pruning_statistics;
 mod schema;
+mod statistics;
+mod value;
 
 /// Iceberg table for datafusion
 pub struct DataFusionTable(Table);
@@ -96,24 +104,111 @@ impl TableProvider for DataFusionTable {
                 .zip(files_to_prune.into_iter())
                 .for_each(|(manifest, prune_file)| {
                     if !prune_file {
-                        // let part = partitioned_file_from_action(action, &schema);
-                        // file_groups
-                        //     .entry(part.partition_values.clone())
-                        //     .or_default()
-                        //     .push(part);
+                        let partition_values = manifest
+                            .data_file
+                            .partition
+                            .iter()
+                            .map(|value| match value {
+                                Some(v) => v.into(),
+                                None => ScalarValue::Null,
+                            })
+                            .collect::<Vec<ScalarValue>>();
+                        let object_meta = ObjectMeta {
+                            location: manifest.data_file.file_path.into(),
+                            size: manifest.data_file.file_size_in_bytes as usize,
+                            last_modified: self
+                                .metadata()
+                                .current_snapshot()
+                                .map(|snapshot| {
+                                    let secs = snapshot.timestamp_ms / 1000;
+                                    let nsecs = (snapshot.timestamp_ms % 1000) as u32 * 1000000;
+                                    DateTime::from_utc(
+                                        NaiveDateTime::from_timestamp(secs, nsecs),
+                                        Utc,
+                                    )
+                                })
+                                .unwrap_or(Utc::now()),
+                        };
+                        let file = PartitionedFile {
+                            object_meta,
+                            partition_values,
+                            range: None,
+                            extensions: None,
+                        };
+                        file_groups
+                            .entry(file.partition_values.clone())
+                            .or_default()
+                            .push(file);
                     };
                 });
         } else {
-            // self.get_state().files().iter().for_each(|action| {
-            //     let part = partitioned_file_from_action(action, &schema);
-            //     file_groups
-            //         .entry(part.partition_values.clone())
-            //         .or_default()
-            //         .push(part);
-            // });
+            let files = self
+                .files(None)
+                .await
+                .map_err(|err| DataFusionError::Internal(format!("{}", err)))?
+                .try_collect::<Vec<_>>()
+                .await
+                .map_err(|err| DataFusionError::Internal(format!("{}", err)))?;
+            files.into_iter().for_each(|manifest| {
+                let partition_values = manifest
+                    .data_file
+                    .partition
+                    .iter()
+                    .map(|value| match value {
+                        Some(v) => v.into(),
+                        None => ScalarValue::Null,
+                    })
+                    .collect::<Vec<ScalarValue>>();
+                let object_meta = ObjectMeta {
+                    location: manifest.data_file.file_path.into(),
+                    size: manifest.data_file.file_size_in_bytes as usize,
+                    last_modified: self
+                        .metadata()
+                        .current_snapshot()
+                        .map(|snapshot| {
+                            let secs = snapshot.timestamp_ms / 1000;
+                            let nsecs = (snapshot.timestamp_ms % 1000) as u32 * 1000000;
+                            DateTime::from_utc(NaiveDateTime::from_timestamp(secs, nsecs), Utc)
+                        })
+                        .unwrap_or(Utc::now()),
+                };
+                let file = PartitionedFile {
+                    object_meta,
+                    partition_values,
+                    range: None,
+                    extensions: None,
+                };
+                file_groups
+                    .entry(file.partition_values.clone())
+                    .or_default()
+                    .push(file);
+            });
         };
 
-        // let file_scan_config = FileScanConfig { object_store_url };
-        unimplemented!()
+        let statistics = self
+            .statistics()
+            .await
+            .map_err(|err| DataFusionError::Internal(format!("{}", err)))?;
+
+        let table_partition_cols = self
+            .metadata()
+            .default_spec()
+            .fields
+            .iter()
+            .map(|field| field.name.clone())
+            .collect();
+
+        let file_scan_config = FileScanConfig {
+            object_store_url,
+            file_schema: schema,
+            file_groups: file_groups.into_values().collect(),
+            statistics,
+            projection: projection.clone(),
+            limit: limit.clone(),
+            table_partition_cols,
+        };
+        ParquetFormat::default()
+            .create_physical_plan(file_scan_config, filters)
+            .await
     }
 }
