@@ -13,9 +13,9 @@ use crate::{
     catalog::{table_identifier::TableIdentifier, Catalog},
     model::{
         manifest_list::ManifestFile,
+        metadata::{Metadata, MetadataV2},
         schema::SchemaV2,
         snapshot::{SnapshotV2, Summary},
-        table::TableMetadataV2,
     },
     transaction::Transaction,
 };
@@ -34,7 +34,7 @@ enum TableType {
 ///Iceberg table
 pub struct Table {
     table_type: TableType,
-    metadata: TableMetadataV2,
+    metadata: Metadata,
     metadata_location: String,
     manifests: Vec<ManifestFile>,
 }
@@ -45,7 +45,7 @@ impl Table {
     pub async fn new_metastore_table(
         identifier: TableIdentifier,
         catalog: Arc<dyn Catalog>,
-        metadata: TableMetadataV2,
+        metadata: Metadata,
         metadata_location: &str,
     ) -> Result<Self> {
         let manifests = get_manifests(&metadata, catalog.object_store())
@@ -106,7 +106,7 @@ impl Table {
             .bytes()
             .await
             .map_err(|err| anyhow!(err.to_string()))?;
-        let metadata: TableMetadataV2 = serde_json::from_str(
+        let metadata: Metadata = serde_json::from_str(
             std::str::from_utf8(bytes).map_err(|err| anyhow!(err.to_string()))?,
         )
         .map_err(|err| anyhow!(err.to_string()))?;
@@ -153,7 +153,7 @@ impl Table {
             .unwrap()
     }
     /// Get the metadata of the table
-    pub fn metadata(&self) -> &TableMetadataV2 {
+    pub fn metadata(&self) -> &Metadata {
         &self.metadata
     }
     /// Get the location of the current metadata file
@@ -210,7 +210,7 @@ impl Table {
 }
 
 pub(crate) async fn get_manifests(
-    metadata: &TableMetadataV2,
+    metadata: &MetadataV2,
     object_store: Arc<dyn ObjectStore>,
 ) -> Result<impl Iterator<Item = Result<ManifestFile>>> {
     let snapshot = if let Some(snapshots) = &metadata.snapshots {

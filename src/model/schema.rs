@@ -230,6 +230,7 @@ pub struct StructField {
     /// Optional or required, meaning that values can (or can not be null)
     pub required: bool,
     /// Field can have any type
+    #[serde(rename = "type")]
     pub field_type: AllType,
     /// Fields can have any optional comment or doc string.
     pub doc: Option<String>,
@@ -250,6 +251,34 @@ pub struct SchemaV2 {
     #[serde(flatten)]
     /// The struct fields
     pub struct_fields: Struct,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+/// Names and types of fields in a table.
+pub struct SchemaV1 {
+    /// Identifier of the schema
+    pub schema_id: Option<i32>,
+    /// Set of primitive fields that identify rows in a table.
+    pub identifier_field_ids: Option<Vec<i32>>,
+
+    /// Name Mapping
+    pub name_mapping: Option<NameMappings>,
+
+    #[serde(flatten)]
+    /// The struct fields
+    pub struct_fields: Struct,
+}
+
+impl From<SchemaV1> for SchemaV2 {
+    fn from(v1: SchemaV1) -> Self {
+        SchemaV2 {
+            schema_id: v1.schema_id.unwrap_or(0),
+            identifier_field_ids: v1.identifier_field_ids,
+            name_mapping: v1.name_mapping,
+            struct_fields: v1.struct_fields,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -334,7 +363,7 @@ mod tests {
             "id" : 1,
             "name": "struct_name",
             "required": true,
-            "field_type": "decimal(1,1)"
+            "type": "decimal(1,1)"
         }
         "#;
         let result_struct = serde_json::from_str::<StructField>(data).unwrap();
@@ -351,7 +380,7 @@ mod tests {
             "id" : 1,
             "name": "struct_name",
             "required": true,
-            "field_type": "decimal(1,1000)"
+            "type": "decimal(1,1000)"
         }
         "#;
         assert!(serde_json::from_str::<StructField>(invalid_decimal_data).is_err());
@@ -364,7 +393,7 @@ mod tests {
             "id" : 1,
             "name": "struct_name",
             "required": true,
-            "field_type": "boolean"
+            "type": "boolean"
         }
         "#;
         let result_struct = serde_json::from_str::<StructField>(data).unwrap();
@@ -381,7 +410,7 @@ mod tests {
             "id" : 1,
             "name": "struct_name",
             "required": true,
-            "field_type": "fixed[1]"
+            "type": "fixed[1]"
         }
         "#;
         let result_struct = serde_json::from_str::<StructField>(data).unwrap();
@@ -395,7 +424,7 @@ mod tests {
             "id" : 1,
             "name": "struct_name",
             "required": true,
-            "field_type": "fixed[0.1]"
+            "type": "fixed[0.1]"
         }
         "#;
         assert!(serde_json::from_str::<StructField>(invalid_fixed_data).is_err());
@@ -449,7 +478,7 @@ mod tests {
                     "id" : 1,
                     "name": "struct_name",
                     "required": true,
-                    "field_type": "fixed[1]"
+                    "type": "fixed[1]"
                 }
             ],
             "name-mapping": {

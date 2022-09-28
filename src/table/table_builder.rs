@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::catalog::table_identifier::TableIdentifier;
 use crate::model::partition::{PartitionField, Transform};
 use crate::model::sort::{NullOrder, SortDirection, SortField, SortOrder};
-use crate::model::{partition::PartitionSpec, schema::SchemaV2, table::TableMetadataV2};
+use crate::model::{metadata::MetadataV2, partition::PartitionSpec, schema::SchemaV2};
 use crate::table::Table;
 use anyhow::{anyhow, Result};
 
@@ -21,7 +21,7 @@ use super::{Catalog, TableType};
 ///Builder pattern to create a table
 pub struct TableBuilder {
     table_type: TableType,
-    metadata: TableMetadataV2,
+    metadata: MetadataV2,
 }
 
 impl TableBuilder {
@@ -50,7 +50,7 @@ impl TableBuilder {
                 null_order: NullOrder::Last,
             }],
         };
-        let metadata = TableMetadataV2 {
+        let metadata = MetadataV2 {
             table_uuid: Uuid::new_v4(),
             location: location.to_string(),
             last_sequence_number: 0,
@@ -102,7 +102,7 @@ impl TableBuilder {
                 null_order: NullOrder::Last,
             }],
         };
-        let metadata = TableMetadataV2 {
+        let metadata = MetadataV2 {
             table_uuid: Uuid::new_v4(),
             location: location.to_string(),
             last_sequence_number: 0,

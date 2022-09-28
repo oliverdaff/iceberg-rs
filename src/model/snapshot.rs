@@ -66,6 +66,46 @@ pub struct SnapshotV2 {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
+/// A V1 compliant snapshot.
+pub struct SnapshotV1 {
+    /// A unique long ID
+    pub snapshot_id: i64,
+    /// The snapshot ID of the snapshot’s parent.
+    /// Omitted for any snapshot with no parent
+    pub parent_snapshot_id: Option<i64>,
+    /// A timestamp when the snapshot was created, used for garbage
+    /// collection and table inspection
+    pub timestamp_ms: i64,
+    /// The location of a manifest list for this snapshot that
+    /// tracks manifest files with additional metadata.
+    pub manifest_list: Option<String>,
+    /// A list of manifest file locations. Must be omitted if manifest-list is present
+    pub manisfests: Option<Vec<String>>,
+    /// A string map that summarizes the snapshot changes, including operation.
+    pub summary: Option<Summary>,
+    /// ID of the table’s current schema when the snapshot was created.
+    pub schema_id: Option<i64>,
+}
+
+impl From<SnapshotV1> for SnapshotV2 {
+    fn from(v1: SnapshotV1) -> Self {
+        SnapshotV2 {
+            snapshot_id: v1.snapshot_id,
+            parent_snapshot_id: v1.parent_snapshot_id,
+            sequence_number: 0,
+            timestamp_ms: v1.timestamp_ms,
+            manifest_list: v1.manifest_list.unwrap_or("".to_owned()),
+            summary: v1.summary.unwrap_or(Summary {
+                operation: None,
+                other: HashMap::new(),
+            }),
+            schema_id: v1.schema_id,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
 /// Iceberg tables keep track of branches and tags using snapshot references.
 pub struct Reference {
     /// A reference’s snapshot ID. The tagged snapshot or latest snapshot of a branch.
@@ -85,13 +125,13 @@ pub enum Retention {
     Branch {
         /// A positive number for the minimum number of snapshots to keep in a
         /// branch while expiring snapshots.
-        min_snapshots_to_keep: i32,
+        min_snapshots_to_keep: Option<i32>,
         /// A positive number for the max age of snapshots to keep when expiring,
         /// including the latest snapshot.
-        max_snapshot_age_ms: i64,
+        max_snapshot_age_ms: Option<i64>,
         /// A positive number for the max age of the snapshot reference to
         /// keep while expiring snapshots.
-        max_ref_age_ms: i64,
+        max_ref_age_ms: Option<i64>,
     },
     #[serde(rename_all = "kebab-case")]
     /// A tag reference.
@@ -155,9 +195,9 @@ mod tests {
     #[test]
     fn test_retention_branch() {
         let retention = Retention::Branch {
-            min_snapshots_to_keep: 1,
-            max_snapshot_age_ms: 1,
-            max_ref_age_ms: 1,
+            min_snapshots_to_keep: Some(1),
+            max_snapshot_age_ms: Some(1),
+            max_ref_age_ms: Some(1),
         };
         let json = serde_json::to_string(&retention).unwrap();
         let result: Retention = serde_json::from_str(&json).unwrap();
