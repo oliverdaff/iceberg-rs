@@ -11,7 +11,7 @@ use crate::{
             Content, DataFileV2, FileFormat, ManifestEntry, ManifestEntryV2, PartitionValues,
             Status,
         },
-        manifest_list::{FieldSummary, ManifestFile},
+        manifest_list::{FieldSummary, ManifestFile, ManifestFileV2},
         schema::SchemaV2,
     },
     table::Table,
@@ -68,6 +68,7 @@ impl Operation {
                         &table_metadata.default_spec(),
                         table_metadata.current_schema(),
                     )?,
+                    &table_metadata.format_version,
                 ))?;
                 let mut manifest_writer = apache_avro::Writer::new(&manifest_schema, Vec::new());
                 for path in paths {
@@ -116,7 +117,9 @@ impl Operation {
                 object_store
                     .put(&manifest_location, manifest_bytes.into())
                     .await?;
-                let manifest_list_schema = apache_avro::Schema::parse_str(&ManifestFile::schema())?;
+                let manifest_list_schema = apache_avro::Schema::parse_str(&ManifestFile::schema(
+                    &table_metadata.format_version,
+                ))?;
                 let mut manifest_list_writer =
                     apache_avro::Writer::new(&manifest_list_schema, Vec::new());
                 match &table_metadata.snapshots {
@@ -136,20 +139,20 @@ impl Operation {
                     }
                     None => (),
                 };
-                let manifest_file = ManifestFile {
+                let manifest_file = ManifestFile(ManifestFileV2 {
                     manifest_path: manifest_location.to_string(),
                     manifest_length: 1200,
                     partition_spec_id: 0,
-                    content: Some(Content::Data),
-                    sequence_number: Some(566),
-                    min_sequence_number: Some(0),
+                    content: Content::Data,
+                    sequence_number: 566,
+                    min_sequence_number: 0,
                     added_snapshot_id: 39487483032,
-                    added_files_count: Some(1),
-                    existing_files_count: Some(2),
-                    deleted_files_count: Some(0),
-                    added_rows_count: Some(1000),
-                    existing_rows_count: Some(8000),
-                    deleted_rows_count: Some(0),
+                    added_files_count: 1,
+                    existing_files_count: 2,
+                    deleted_files_count: 0,
+                    added_rows_count: 1000,
+                    existing_rows_count: 8000,
+                    deleted_rows_count: 0,
                     partitions: Some(vec![FieldSummary {
                         contains_null: true,
                         contains_nan: Some(false),
@@ -157,7 +160,7 @@ impl Operation {
                         upper_bound: None,
                     }]),
                     key_metadata: None,
-                };
+                });
                 manifest_list_writer.append_ser(manifest_file)?;
                 let manifest_list_bytes = manifest_list_writer.into_inner()?;
                 let manifest_list_location: Path = table_metadata

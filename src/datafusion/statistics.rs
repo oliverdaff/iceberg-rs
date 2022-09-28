@@ -23,10 +23,9 @@ impl DataFusionTable {
             |acc, x| {
                 let acc = acc?;
                 Ok(Statistics {
-                    num_rows: acc.num_rows.map(|num_rows| match x.added_files_count {
-                        Some(count) => num_rows + count as usize,
-                        None => num_rows,
-                    }),
+                    num_rows: acc
+                        .num_rows
+                        .map(|num_rows| num_rows + x.added_files_count as usize),
                     total_byte_size: None,
                     column_statistics: Some(vec![
                         ColumnStatistics {

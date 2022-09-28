@@ -11,6 +11,7 @@ use crate::model::{
     sort,
 };
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use uuid::Uuid;
 
 use super::partition::PartitionField;
@@ -66,11 +67,22 @@ enum TableMetadataVersion {
     V1(MetadataV1),
 }
 
+#[derive(Debug, Serialize_repr, Deserialize_repr, PartialEq, Eq, Clone)]
+#[repr(i32)]
+/// Used to track additions and deletions
+pub enum FormatVersion {
+    /// Existing files
+    V1 = 1,
+    /// Added files
+    V2 = 2,
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case", tag = "format-version")]
+#[serde(rename_all = "kebab-case")]
 /// Fields for the version 2 of the table metadata.
 pub struct MetadataV2 {
     /// Integer Version for the format.
+    pub format_version: FormatVersion,
     /// A UUID that identifies the table
     pub table_uuid: Uuid,
     /// Location tables base location
@@ -133,10 +145,11 @@ pub struct MetadataV2 {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case", tag = "format-version")]
+#[serde(rename_all = "kebab-case")]
 /// Fields for the version 1 of the table metadata.
 pub struct MetadataV1 {
     /// Integer Version for the format.
+    pub format_version: FormatVersion,
     /// A UUID that identifies the table
     pub table_uuid: Option<Uuid>,
     /// Location tables base location
@@ -209,6 +222,7 @@ impl From<MetadataV1> for MetadataV2 {
             .unwrap_or(v1.schema.schema_id.unwrap_or(0));
         let default_spec_id = v1.default_spec_id.unwrap_or(0);
         MetadataV2 {
+            format_version: FormatVersion::V2,
             table_uuid: v1.table_uuid.unwrap_or(Uuid::new_v4()),
             location: v1.location,
             last_sequence_number: 0,

@@ -15,7 +15,7 @@ use serde::{
 use serde_bytes::ByteBuf;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use super::{partition::PartitionSpec, schema::SchemaV2, types::Value};
+use super::{metadata::FormatVersion, partition::PartitionSpec, schema::SchemaV2, types::Value};
 
 /// Details of a manifest file
 pub struct Manifest {
@@ -147,9 +147,38 @@ impl From<ManifestEntryV1> for ManifestEntryV2 {
 
 impl ManifestEntry {
     /// Get schema of manifest entry.
-    pub fn schema(partition_schema: &str) -> String {
-        let datafile_schema = DataFileV2::schema(partition_schema);
-        r#"{
+    pub fn schema(partition_schema: &str, format_version: &FormatVersion) -> String {
+        match format_version {
+            FormatVersion::V1 => {
+                let datafile_schema = DataFileV2::schemav1(partition_schema);
+                r#"{
+            "type": "record",
+            "name": "manifest_entry",
+            "fields": [
+                {
+                    "name": "status",
+                    "type": "int",
+                    "field_id": 0
+                },
+                {
+                    "name": "snapshot_id",
+                    "type": "long"
+                    "field_id": 1
+                },
+                {
+                    "name": "data_file",
+                    "type": "#
+                    .to_owned()
+                    + &datafile_schema
+                    + r#",
+                    "field_id": 2
+                }
+            ]
+        }"#
+            }
+            FormatVersion::V2 => {
+                let datafile_schema = DataFileV2::schemav2(partition_schema);
+                r#"{
             "type": "record",
             "name": "manifest_entry",
             "fields": [
@@ -179,13 +208,15 @@ impl ManifestEntry {
                 {
                     "name": "data_file",
                     "type": "#
-            .to_owned()
-            + &datafile_schema
-            + r#",
+                    .to_owned()
+                    + &datafile_schema
+                    + r#",
                     "field_id": 2
                 }
             ]
         }"#
+            }
+        }
     }
 }
 
@@ -532,20 +563,11 @@ impl From<DataFileV1> for DataFileV2 {
 
 impl DataFileV2 {
     /// Get schema
-    pub fn schema(partition_schema: &str) -> String {
+    pub fn schemav1(partition_schema: &str) -> String {
         r#"{
             "type": "record",
             "name": "r2",
             "fields": [
-                {
-                    "name": "content",
-                    "type": [
-                        "null",
-                        "int"
-                    ],
-                    "default": null,
-                    "field_id": 134
-                },
                 {
                     "name": "file_path",
                     "type": "string",
@@ -576,11 +598,7 @@ impl DataFileV2 {
                 },
                 {
                     "name": "block_size_in_bytes",
-                    "type": [
-                        "null",
-                        "long"
-                    ],
-                    "default": null,
+                    "type": "long"
                     "field_id": 105
                 },
                 {
@@ -604,6 +622,275 @@ impl DataFileV2 {
                     ],
                     "default": null,
                     "field_id": 107
+                },
+                {
+                    "name": "column_sizes",
+                    "type": [
+                        "null",
+                        {
+                            "type": "array",
+                            "logicalType": "map",
+                            "items": {
+                                "type": "record",
+                                "name": "k117_v118",
+                                "fields": [
+                                    {
+                                        "name": "key",
+                                        "type": "int",
+                                        "field-id": 117
+                                    },
+                                    {
+                                        "name": "value",
+                                        "type": "long",
+                                        "field-id": 118
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "default": null,
+                    "field_id": 108
+                },
+                {
+                    "name": "value_counts",
+                    "type": [
+                        "null",
+                        {
+                            "type": "array",
+                            "logicalType": "map",
+                            "items": {
+                                "type": "record",
+                                "name": "k119_v120",
+                                "fields": [
+                                    {
+                                        "name": "key",
+                                        "type": "int",
+                                        "field-id": 119
+                                    },
+                                    {
+                                        "name": "value",
+                                        "type": "long",
+                                        "field-id": 120
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "default": null,
+                    "field_id": 109
+                },
+                {
+                    "name": "null_value_counts",
+                    "type": [
+                        "null",
+                        {
+                            "type": "array",
+                            "logicalType": "map",
+                            "items": {
+                                "type": "record",
+                                "name": "k121_v122",
+                                "fields": [
+                                    {
+                                        "name": "key",
+                                        "type": "int",
+                                        "field-id": 121
+                                    },
+                                    {
+                                        "name": "value",
+                                        "type": "long",
+                                        "field-id": 122
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "default": null,
+                    "field_id": 110
+                },
+                {
+                    "name": "nan_value_counts",
+                    "type": [
+                        "null",
+                        {
+                            "type": "array",
+                            "logicalType": "map",
+                            "items": {
+                                "type": "record",
+                                "name": "k138_v139",
+                                "fields": [
+                                    {
+                                        "name": "key",
+                                        "type": "int",
+                                        "field-id": 138
+                                    },
+                                    {
+                                        "name": "value",
+                                        "type": "long",
+                                        "field-id": 139
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "default": null,
+                    "field_id": 137
+                },
+                {
+                    "name": "distinct_counts",
+                    "type": [
+                        "null",
+                        {
+                            "type": "array",
+                            "logicalType": "map",
+                            "items": {
+                                "type": "record",
+                                "name": "k123_v124",
+                                "fields": [
+                                    {
+                                        "name": "key",
+                                        "type": "int",
+                                        "field-id": 123
+                                    },
+                                    {
+                                        "name": "value",
+                                        "type": "long",
+                                        "field-id": 124
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "default": null,
+                    "field_id": 111
+                },
+                {
+                    "name": "lower_bounds",
+                    "type": [
+                        "null",
+                        {
+                            "type": "array",
+                            "logicalType": "map",
+                            "items": {
+                                "type": "record",
+                                "name": "k126_v127",
+                                "fields": [
+                                    {
+                                        "name": "key",
+                                        "type": "int",
+                                        "field-id": 126
+                                    },
+                                    {
+                                        "name": "value",
+                                        "type": "bytes",
+                                        "field-id": 127
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "default": null,
+                    "field_id": 125
+                },
+                {
+                    "name": "upper_bounds",
+                    "type": [
+                        "null",
+                        {
+                            "type": "array",
+                            "logicalType": "map",
+                            "items": {
+                                "type": "record",
+                                "name": "k129_v130",
+                                "fields": [
+                                    {
+                                        "name": "key",
+                                        "type": "int",
+                                        "field-id": 129
+                                    },
+                                    {
+                                        "name": "value",
+                                        "type": "bytes",
+                                        "field-id": 130
+                                    }
+                                ]
+                            }
+                        }
+                    ],
+                    "default": null,
+                    "field_id": 128
+                },
+                {
+                    "name": "key_metadata",
+                    "type": [
+                        "null",
+                        "bytes"
+                    ],
+                    "default": null,
+                    "field_id": 131
+                },
+                {
+                    "name": "split_offsets",
+                    "type": [
+                        "null",
+                        {
+                            "type": "array",
+                            "items": "long",
+                            "element-id": 133
+                        }
+                    ],
+                    "default": null,
+                    "field_id": 132
+                },
+                {
+                    "name": "sort_order_id",
+                    "type": [
+                        "null",
+                        "int"
+                    ],
+                    "default": null,
+                    "field_id": 140
+                }
+            ]
+        }"#
+    }
+    /// Get schema
+    pub fn schemav2(partition_schema: &str) -> String {
+        r#"{
+            "type": "record",
+            "name": "r2",
+            "fields": [
+                {
+                    "name": "content",
+                    "type": "int",
+                    "field_id": 134
+                },
+                {
+                    "name": "file_path",
+                    "type": "string",
+                    "field_id": 100
+                },
+                {
+                    "name": "file_format",
+                    "type": "string",
+                    "field_id": 101
+                },
+                {
+                    "name": "partition",
+                    "type": "#
+            .to_owned()
+            + partition_schema
+            + r#",
+                    "field_id": 102
+                },
+                {
+                    "name": "record_count",
+                    "type": "long",
+                    "field_id": 103
+                },
+                {
+                    "name": "file_size_in_bytes",
+                    "type": "long",
+                    "field_id": 104
                 },
                 {
                     "name": "column_sizes",
@@ -977,7 +1264,7 @@ mod tests {
 
                 let partition_schema = PartitionValues::schema(&spec, &table_schema).unwrap();
 
-                let raw_schema = ManifestEntry::schema(&partition_schema);
+                let raw_schema = ManifestEntry::schema(&partition_schema, &FormatVersion::V2);
 
                 let schema = apache_avro::Schema::parse_str(&raw_schema).unwrap();
 
@@ -1051,7 +1338,7 @@ mod tests {
 
                 let partition_schema = PartitionValues::schema(&spec, &table_schema).unwrap();
 
-            let raw_schema = ManifestEntry::schema(&partition_schema);
+            let raw_schema = ManifestEntry::schema(&partition_schema, &FormatVersion::V2);
 
             let schema = apache_avro::Schema::parse_str(&raw_schema).unwrap();
 
@@ -1127,7 +1414,7 @@ mod tests {
 
         let partition_schema = PartitionValues::schema(&spec, &table_schema).unwrap();
 
-            let raw_schema = ManifestEntry::schema(&partition_schema);
+            let raw_schema = ManifestEntry::schema(&partition_schema, &FormatVersion::V2);
 
             let schema = apache_avro::Schema::parse_str(&raw_schema).unwrap();
 
