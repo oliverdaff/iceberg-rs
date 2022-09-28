@@ -4,19 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
-use serde_repr::{Deserialize_repr, Serialize_repr};
 
-#[derive(Debug, Serialize_repr, Deserialize_repr, PartialEq, Eq, Clone)]
-#[repr(u8)]
-/// Type of content stored by the data file.
-pub enum Content {
-    /// Data.
-    Data = 0,
-    /// Deletes at position.
-    PositionDeletes = 1,
-    /// Delete by equality.
-    EqualityDeletes = 2,
-}
+use super::manifest::Content;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 /// DataFile found in Manifest.

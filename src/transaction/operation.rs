@@ -7,8 +7,11 @@ use object_store::path::Path;
 
 use crate::{
     model::{
-        manifest::{DataFile, FileFormat, ManifestEntry, PartitionValues, Status},
-        manifest_list::{Content, FieldSummary, ManifestFile},
+        manifest::{
+            Content, DataFileV2, FileFormat, ManifestEntry, ManifestEntryV2, PartitionValues,
+            Status,
+        },
+        manifest_list::{FieldSummary, ManifestFile},
         schema::SchemaV2,
     },
     table::Table,
@@ -68,15 +71,15 @@ impl Operation {
                 ))?;
                 let mut manifest_writer = apache_avro::Writer::new(&manifest_schema, Vec::new());
                 for path in paths {
-                    let manifest_entry = ManifestEntry {
+                    let manifest_entry = ManifestEntry(ManifestEntryV2 {
                         status: Status::Added,
                         snapshot_id: table_metadata.current_snapshot_id,
                         sequence_number: table_metadata
                             .snapshots
                             .as_ref()
                             .map(|snapshots| snapshots.last().unwrap().sequence_number),
-                        data_file: DataFile {
-                            content: None,
+                        data_file: DataFileV2 {
+                            content: Content::Data,
                             file_path: path,
                             file_format: FileFormat::Parquet,
                             partition: PartitionValues::from_iter(
@@ -88,9 +91,6 @@ impl Operation {
                             ),
                             record_count: 4,
                             file_size_in_bytes: 1200,
-                            block_size_in_bytes: None,
-                            file_ordinal: None,
-                            sort_columns: None,
                             column_sizes: None,
                             value_counts: None,
                             null_value_counts: None,
@@ -103,7 +103,7 @@ impl Operation {
                             equality_ids: None,
                             sort_order_id: None,
                         },
-                    };
+                    });
                     manifest_writer.append_ser(manifest_entry)?;
                 }
                 let manifest_bytes = manifest_writer.into_inner()?;

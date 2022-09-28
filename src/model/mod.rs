@@ -5,7 +5,7 @@ serialise and deserialise the JSON.
 ## Table metadata example
 
 ```rust
-use iceberg_rs::model::table::TableMetadataV2;
+use iceberg_rs::model::metadata::Metadata;
 
 let data = r#"
     {
@@ -24,7 +24,7 @@ let data = r#"
                         "id": 1,
                         "name": "struct_name",
                         "required": true,
-                        "field_type": "fixed[1]"
+                        "type": "fixed[1]"
                     }
                 ]
             }
@@ -58,7 +58,7 @@ let data = r#"
         "default-sort-order-id": 0
     }
 "#;
- let metadata = serde_json::from_str::<TableMetadataV2>(&data).unwrap();
+ let metadata = serde_json::from_str::<Metadata>(&data).unwrap();
 ```
 
 */

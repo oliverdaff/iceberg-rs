@@ -197,7 +197,7 @@ mod tests {
             .files(None)
             .await
             .unwrap()
-            .map(|manifest_entry| manifest_entry.map(|x| x.data_file.file_path));
+            .map(|manifest_entry| manifest_entry.map(|x| x.0.data_file.file_path));
         assert_eq!(
             files.next().await.unwrap().unwrap(),
             "test/append/data/file1.parquet".to_string()

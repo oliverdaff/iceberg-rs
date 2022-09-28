@@ -57,9 +57,60 @@ pub enum Status {
     Deleted = 2,
 }
 
+/// Entry in manifest file.
+#[derive(Debug, PartialEq, Clone)]
+pub struct ManifestEntry(pub ManifestEntryV2);
+
+impl core::ops::Deref for ManifestEntry {
+    type Target = ManifestEntryV2;
+
+    fn deref(self: &'_ Self) -> &'_ Self::Target {
+        &self.0
+    }
+}
+
+impl core::ops::DerefMut for ManifestEntry {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+/// Serialize for PrimitiveType wit special handling for
+/// Decimal and Fixed types.
+impl Serialize for ManifestEntry {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+/// Serialize for PrimitiveType wit special handling for
+/// Decimal and Fixed types.
+impl<'de> Deserialize<'de> for ManifestEntry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let entry = ManifestEntryVersion::deserialize(deserializer)?;
+        match entry {
+            ManifestEntryVersion::V1(entry) => Ok(ManifestEntry(entry.into())),
+            ManifestEntryVersion::V2(entry) => Ok(ManifestEntry(entry)),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[serde(untagged)]
+enum ManifestEntryVersion {
+    V2(ManifestEntryV2),
+    V1(ManifestEntryV1),
+}
+
 /// Entry in manifest.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-pub struct ManifestEntry {
+pub struct ManifestEntryV2 {
     /// Used to track additions and deletions
     pub status: Status,
     /// Snapshot id where the file was added, or deleted if status is 2.
@@ -68,13 +119,36 @@ pub struct ManifestEntry {
     /// Sequence number when the file was added. Inherited when null.
     pub sequence_number: Option<i64>,
     /// File path, partition tuple, metrics, …
-    pub data_file: DataFile,
+    pub data_file: DataFileV2,
+}
+
+/// Entry in manifest.
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct ManifestEntryV1 {
+    /// Used to track additions and deletions
+    pub status: Status,
+    /// Snapshot id where the file was added, or deleted if status is 2.
+    /// Inherited when null.
+    pub snapshot_id: i64,
+    /// File path, partition tuple, metrics, …
+    pub data_file: DataFileV1,
+}
+
+impl From<ManifestEntryV1> for ManifestEntryV2 {
+    fn from(v1: ManifestEntryV1) -> Self {
+        ManifestEntryV2 {
+            status: v1.status,
+            snapshot_id: Some(v1.snapshot_id),
+            sequence_number: Some(0),
+            data_file: v1.data_file.into(),
+        }
+    }
 }
 
 impl ManifestEntry {
     /// Get schema of manifest entry.
     pub fn schema(partition_schema: &str) -> String {
-        let datafile_schema = DataFile::schema(partition_schema);
+        let datafile_schema = DataFileV2::schema(partition_schema);
         r#"{
             "type": "record",
             "name": "manifest_entry",
@@ -354,9 +428,9 @@ impl<'de, T: Serialize + DeserializeOwned + Clone> Deserialize<'de> for AvroMap<
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 /// DataFile found in Manifest.
-pub struct DataFile {
+pub struct DataFileV2 {
     ///Type of content in data file.
-    pub content: Option<Content>,
+    pub content: Content,
     /// Full URI for the file with a FS scheme.
     pub file_path: String,
     /// String file format name, avro, orc or parquet
@@ -367,12 +441,6 @@ pub struct DataFile {
     pub record_count: i64,
     /// Total file size in bytes
     pub file_size_in_bytes: i64,
-    /// Block size
-    pub block_size_in_bytes: Option<i64>,
-    /// File ordinal
-    pub file_ordinal: Option<i32>,
-    /// Columns to sort
-    pub sort_columns: Option<Vec<i32>>,
     /// Map from column id to total size on disk
     pub column_sizes: Option<AvroMap<i64>>,
     /// Map from column id to number of values in the column (including null and NaN values)
@@ -397,7 +465,72 @@ pub struct DataFile {
     pub sort_order_id: Option<i32>,
 }
 
-impl DataFile {
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+/// DataFile found in Manifest.
+pub struct DataFileV1 {
+    /// Full URI for the file with a FS scheme.
+    pub file_path: String,
+    /// String file format name, avro, orc or parquet
+    pub file_format: FileFormat,
+    /// Partition data tuple, schema based on the partition spec output using partition field ids for the struct field ids
+    pub partition: PartitionValues,
+    /// Number of records in this file
+    pub record_count: i64,
+    /// Total file size in bytes
+    pub file_size_in_bytes: i64,
+    /// Block size
+    pub block_size_in_bytes: i64,
+    /// File ordinal
+    pub file_ordinal: Option<i32>,
+    /// Columns to sort
+    pub sort_columns: Option<Vec<i32>>,
+    /// Map from column id to total size on disk
+    pub column_sizes: Option<AvroMap<i64>>,
+    /// Map from column id to number of values in the column (including null and NaN values)
+    pub value_counts: Option<AvroMap<i64>>,
+    /// Map from column id to number of null values
+    pub null_value_counts: Option<AvroMap<i64>>,
+    /// Map from column id to number of NaN values
+    pub nan_value_counts: Option<AvroMap<i64>>,
+    /// Map from column id to number of distinct values in the column.
+    pub distinct_counts: Option<AvroMap<i64>>,
+    /// Map from column id to lower bound in the column
+    pub lower_bounds: Option<AvroMap<ByteBuf>>,
+    /// Map from column id to upper bound in the column
+    pub upper_bounds: Option<AvroMap<ByteBuf>>,
+    /// Implementation specific key metadata for encryption
+    pub key_metadata: Option<ByteBuf>,
+    /// Split offsets for the data file.
+    pub split_offsets: Option<Vec<i64>>,
+    /// ID representing sort order for this file
+    pub sort_order_id: Option<i32>,
+}
+
+impl From<DataFileV1> for DataFileV2 {
+    fn from(v1: DataFileV1) -> Self {
+        DataFileV2 {
+            content: Content::Data,
+            file_path: v1.file_path,
+            file_format: v1.file_format,
+            partition: v1.partition,
+            record_count: v1.record_count,
+            file_size_in_bytes: v1.file_size_in_bytes,
+            column_sizes: v1.column_sizes,
+            value_counts: v1.value_counts,
+            null_value_counts: v1.null_value_counts,
+            nan_value_counts: v1.nan_value_counts,
+            distinct_counts: v1.distinct_counts,
+            lower_bounds: v1.lower_bounds,
+            upper_bounds: v1.upper_bounds,
+            key_metadata: v1.key_metadata,
+            split_offsets: v1.split_offsets,
+            equality_ids: None,
+            sort_order_id: v1.sort_order_id,
+        }
+    }
+}
+
+impl DataFileV2 {
     /// Get schema
     pub fn schema(partition_schema: &str) -> String {
         r#"{
@@ -786,20 +919,17 @@ mod tests {
             snapshot_id in prop::option::of(any::<i64>()),
             sequence_number in prop::option::of(any::<i64>())
         )  -> ManifestEntry{
-            ManifestEntry{
+            ManifestEntry(ManifestEntryV2{
                 status,
                 snapshot_id,
                 sequence_number,
-                data_file: DataFile {
-                    content: None,
+                data_file: DataFileV2 {
+                    content: Content::Data,
                     file_path: "/".to_string(),
                     file_format: FileFormat::Parquet,
                     partition: PartitionValues::from_iter(vec![("ts_day".to_owned(), Some(Value::Int(1)))]),
                     record_count: 4,
                     file_size_in_bytes: 1200,
-                    block_size_in_bytes: None,
-                    file_ordinal: None,
-                    sort_columns: None,
                     column_sizes: None,
                     value_counts: None,
                     null_value_counts: None,
@@ -812,7 +942,7 @@ mod tests {
                     equality_ids: None,
                     sort_order_id: None,
                 }
-            }
+            })
         }
     }
 

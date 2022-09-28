@@ -62,8 +62,8 @@ impl<'de> Deserialize<'de> for Metadata {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 enum TableMetadataVersion {
-    V1(MetadataV1),
     V2(MetadataV2),
+    V1(MetadataV1),
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -297,12 +297,10 @@ impl MetadataV2 {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
 
     use anyhow::Result;
-    use object_store::{local::LocalFileSystem, ObjectStore};
 
-    use crate::model::metadata::{Metadata, MetadataV1};
+    use crate::model::metadata::Metadata;
 
     use super::MetadataV2;
 
