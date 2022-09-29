@@ -22,7 +22,7 @@ use super::{
 /// Details of a manifest file
 pub struct Manifest {
     /// The manifest metadata
-    pub metadata: Metadata,
+    pub metadata: ManifestMetadata,
     /// The manifest entry
     pub entry: ManifestEntry,
 }
@@ -30,7 +30,7 @@ pub struct Manifest {
 /// Lists data files or delete files, along with each file’s
 /// partition data tuple, metrics, and tracking information.
 /// Should this be called metadata?
-pub struct Metadata {
+pub struct ManifestMetadata {
     /// JSON representation of the table schema at the time the manifest was written
     /// Should this be Typed?
     pub schema: String,
@@ -1143,7 +1143,7 @@ pub fn read_manifest<R: std::io::Read>(r: R) -> Result<Manifest> {
 }
 
 /// Read metadata from the avro reader
-fn read_metadata<R: std::io::Read>(reader: &apache_avro::Reader<R>) -> Result<Metadata> {
+fn read_metadata<R: std::io::Read>(reader: &apache_avro::Reader<R>) -> Result<ManifestMetadata> {
     let read_string = |key: &str| {
         reader
             .user_metadata()
@@ -1158,7 +1158,7 @@ fn read_metadata<R: std::io::Read>(reader: &apache_avro::Reader<R>) -> Result<Me
     let partition_spec_id = read_string("partition-spec-id")?;
     let format_version = read_string("format-version")?;
     let content = read_string("content")?;
-    Ok(Metadata {
+    Ok(ManifestMetadata {
         schema,
         schema_id,
         partition_spec,
