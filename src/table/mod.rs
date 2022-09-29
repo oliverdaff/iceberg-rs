@@ -201,10 +201,10 @@ impl Table {
                 };
                 if let Some(snapshots) = &mut metadata.snapshots {
                     snapshots.push(snapshot);
-                    metadata.current_snapshot_id = Some(snapshots.len() as i64)
+                    metadata.current_snapshot_id = Some(snapshot_id)
                 } else {
                     metadata.snapshots = Some(vec![snapshot]);
-                    metadata.current_snapshot_id = Some(0i64)
+                    metadata.current_snapshot_id = Some(snapshot_id)
                 }
             }
             Metadata::V2(metadata) => {
