@@ -11,7 +11,7 @@ use crate::{
             Content, DataFileV1, DataFileV2, FileFormat, ManifestEntry, ManifestEntryV1,
             ManifestEntryV2, PartitionValues, Status,
         },
-        manifest_list::{FieldSummary, ManifestFile, ManifestFileV2},
+        manifest_list::{FieldSummary, ManifestFile, ManifestFileV1, ManifestFileV2},
         metadata::Metadata,
         schema::SchemaV2,
     },
@@ -167,44 +167,89 @@ impl Operation {
                 object_store
                     .put(&manifest_location, manifest_bytes.into())
                     .await?;
-                let manifest_list_schema = apache_avro::Schema::parse_str(&ManifestFile::schema(
-                    &table_metadata.format_version(),
-                ))?;
-                let mut manifest_list_writer =
-                    apache_avro::Writer::new(&manifest_list_schema, Vec::new());
-                match table_metadata.old_manifest_list() {
-                    Some(old_manifest_location) => {
-                        let path = old_manifest_location.into();
-                        let bytes: Vec<u8> = object_store.get(&path).await?.bytes().await?.into();
-                        let reader = apache_avro::Reader::new(&*bytes)?;
-                        manifest_list_writer.extend(reader.filter_map(Result::ok))?;
+                let manifest_list_bytes = match table_metadata {
+                    Metadata::V1(_) => {
+                        let manifest_list_schema = apache_avro::Schema::parse_str(
+                            &ManifestFile::schema(&table_metadata.format_version()),
+                        )?;
+                        let mut manifest_list_writer =
+                            apache_avro::Writer::new(&manifest_list_schema, Vec::new());
+                        match table_metadata.old_manifest_list() {
+                            Some(old_manifest_location) => {
+                                let path = old_manifest_location.into();
+                                let bytes: Vec<u8> =
+                                    object_store.get(&path).await?.bytes().await?.into();
+                                let reader = apache_avro::Reader::new(&*bytes)?;
+                                manifest_list_writer.extend(reader.filter_map(Result::ok))?;
+                            }
+                            None => (),
+                        };
+                        let manifest_file = ManifestFile::V1(ManifestFileV1 {
+                            manifest_path: manifest_location.to_string(),
+                            manifest_length: 1200,
+                            partition_spec_id: 0,
+                            added_snapshot_id: 39487483032,
+                            added_files_count: Some(1),
+                            existing_files_count: Some(2),
+                            deleted_files_count: Some(0),
+                            added_rows_count: Some(1000),
+                            existing_rows_count: Some(8000),
+                            deleted_rows_count: Some(0),
+                            partitions: Some(vec![FieldSummary {
+                                contains_null: true,
+                                contains_nan: Some(false),
+                                lower_bound: None,
+                                upper_bound: None,
+                            }]),
+                            key_metadata: None,
+                        });
+                        manifest_list_writer.append_ser(manifest_file)?;
+
+                        manifest_list_writer.into_inner()?
                     }
-                    None => (),
+                    Metadata::V2(_) => {
+                        let manifest_list_schema = apache_avro::Schema::parse_str(
+                            &ManifestFile::schema(&table_metadata.format_version()),
+                        )?;
+                        let mut manifest_list_writer =
+                            apache_avro::Writer::new(&manifest_list_schema, Vec::new());
+                        match table_metadata.old_manifest_list() {
+                            Some(old_manifest_location) => {
+                                let path = old_manifest_location.into();
+                                let bytes: Vec<u8> =
+                                    object_store.get(&path).await?.bytes().await?.into();
+                                let reader = apache_avro::Reader::new(&*bytes)?;
+                                manifest_list_writer.extend(reader.filter_map(Result::ok))?;
+                            }
+                            None => (),
+                        };
+                        let manifest_file = ManifestFile::V2(ManifestFileV2 {
+                            manifest_path: manifest_location.to_string(),
+                            manifest_length: 1200,
+                            partition_spec_id: 0,
+                            content: Content::Data,
+                            sequence_number: 566,
+                            min_sequence_number: 0,
+                            added_snapshot_id: 39487483032,
+                            added_files_count: 1,
+                            existing_files_count: 2,
+                            deleted_files_count: 0,
+                            added_rows_count: 1000,
+                            existing_rows_count: 8000,
+                            deleted_rows_count: 0,
+                            partitions: Some(vec![FieldSummary {
+                                contains_null: true,
+                                contains_nan: Some(false),
+                                lower_bound: None,
+                                upper_bound: None,
+                            }]),
+                            key_metadata: None,
+                        });
+                        manifest_list_writer.append_ser(manifest_file)?;
+
+                        manifest_list_writer.into_inner()?
+                    }
                 };
-                let manifest_file = ManifestFile::V2(ManifestFileV2 {
-                    manifest_path: manifest_location.to_string(),
-                    manifest_length: 1200,
-                    partition_spec_id: 0,
-                    content: Content::Data,
-                    sequence_number: 566,
-                    min_sequence_number: 0,
-                    added_snapshot_id: 39487483032,
-                    added_files_count: 1,
-                    existing_files_count: 2,
-                    deleted_files_count: 0,
-                    added_rows_count: 1000,
-                    existing_rows_count: 8000,
-                    deleted_rows_count: 0,
-                    partitions: Some(vec![FieldSummary {
-                        contains_null: true,
-                        contains_nan: Some(false),
-                        lower_bound: None,
-                        upper_bound: None,
-                    }]),
-                    key_metadata: None,
-                });
-                manifest_list_writer.append_ser(manifest_file)?;
-                let manifest_list_bytes = manifest_list_writer.into_inner()?;
                 let manifest_list_location: Path = table_metadata
                     .manifest_list()
                     .ok_or_else(|| anyhow!("No manifest list in table metadata."))?
