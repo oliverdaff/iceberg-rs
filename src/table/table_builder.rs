@@ -10,7 +10,6 @@ use object_store::ObjectStore;
 use uuid::Uuid;
 
 use crate::catalog::table_identifier::TableIdentifier;
-use crate::model::metadata::FormatVersion;
 use crate::model::partition::{PartitionField, Transform};
 use crate::model::sort::{NullOrder, SortDirection, SortField, SortOrder};
 use crate::model::{metadata::MetadataV2, partition::PartitionSpec, schema::SchemaV2};
@@ -52,7 +51,6 @@ impl TableBuilder {
             }],
         };
         let metadata = MetadataV2 {
-            format_version: FormatVersion::V2,
             table_uuid: Uuid::new_v4(),
             location: location.to_string(),
             last_sequence_number: 0,
@@ -105,7 +103,6 @@ impl TableBuilder {
             }],
         };
         let metadata = MetadataV2 {
-            format_version: FormatVersion::V2,
             table_uuid: Uuid::new_v4(),
             location: location.to_string(),
             last_sequence_number: 0,

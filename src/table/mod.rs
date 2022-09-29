@@ -13,9 +13,9 @@ use crate::{
     catalog::{table_identifier::TableIdentifier, Catalog},
     model::{
         manifest_list::ManifestFile,
-        metadata::{Metadata, MetadataV2},
-        schema::SchemaV2,
-        snapshot::{SnapshotV2, Summary},
+        metadata::Metadata,
+        schema::SchemaStruct,
+        snapshot::{SnapshotV1, SnapshotV2, Summary},
     },
     transaction::Transaction,
 };
@@ -51,7 +51,7 @@ impl Table {
         let manifests = get_manifests(&metadata, catalog.object_store())
             .await
             .and_then(|x| x.collect::<Result<Vec<_>>>())
-            .unwrap_or(Vec::new());
+            .unwrap_or_default();
         Ok(Table {
             table_type: TableType::Metastore(identifier, catalog),
             metadata,
@@ -113,7 +113,7 @@ impl Table {
         let manifests = get_manifests(&metadata, Arc::clone(object_store))
             .await
             .and_then(|x| x.collect::<Result<Vec<_>>>())
-            .unwrap_or(Vec::new());
+            .unwrap_or_default();
         Ok(Table {
             metadata,
             table_type: TableType::FileSystem(Arc::clone(object_store)),
@@ -143,14 +143,8 @@ impl Table {
         }
     }
     /// Get the metadata of the table
-    pub fn schema(&self) -> &SchemaV2 {
-        &self
-            .metadata
-            .schemas
-            .iter()
-            .filter(|schema| schema.schema_id == self.metadata.current_schema_id)
-            .next()
-            .unwrap()
+    pub fn schema(&self) -> &SchemaStruct {
+        self.metadata.current_schema()
     }
     /// Get the metadata of the table
     pub fn metadata(&self) -> &Metadata {
@@ -173,52 +167,86 @@ impl Table {
 /// Private interface of the table.
 impl Table {
     pub(crate) fn increment_sequence_number(&mut self) {
-        self.metadata.last_sequence_number += 1;
+        match &mut self.metadata {
+            Metadata::V1(_) => (),
+            Metadata::V2(metadata) => {
+                metadata.last_sequence_number += 1;
+            }
+        }
     }
 
     pub(crate) fn new_snapshot(&mut self) {
         let mut bytes: [u8; 8] = [0u8; 8];
         getrandom::getrandom(&mut bytes).unwrap();
         let snapshot_id = i64::from_le_bytes(bytes);
-        let snapshot = SnapshotV2 {
-            snapshot_id: snapshot_id,
-            parent_snapshot_id: self.metadata().current_snapshot_id,
-            sequence_number: self.metadata().last_sequence_number + 1,
-            timestamp_ms: SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as i64,
-            manifest_list: self.metadata().location.to_string()
-                + "/metadata/snap-"
-                + &snapshot_id.to_string()
-                + &uuid::Uuid::new_v4().to_string()
-                + ".avro",
-            summary: Summary {
-                operation: None,
-                other: HashMap::new(),
-            },
-            schema_id: Some(self.metadata().current_schema_id as i64),
-        };
-        if let Some(snapshots) = &mut self.metadata.snapshots {
-            snapshots.push(snapshot);
-            self.metadata.current_snapshot_id = Some(snapshots.len() as i64)
-        } else {
-            self.metadata.snapshots = Some(vec![snapshot]);
-            self.metadata.current_snapshot_id = Some(0i64)
+        match &mut self.metadata {
+            Metadata::V1(metadata) => {
+                let snapshot = SnapshotV1 {
+                    snapshot_id,
+                    parent_snapshot_id: metadata.current_snapshot_id,
+                    timestamp_ms: SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as i64,
+                    manifest_list: Some(
+                        metadata.location.to_string()
+                            + "/metadata/snap-"
+                            + &snapshot_id.to_string()
+                            + &uuid::Uuid::new_v4().to_string()
+                            + ".avro",
+                    ),
+                    manifests: None,
+                    summary: None,
+                    schema_id: metadata.current_schema_id.map(|id| id as i64),
+                };
+                if let Some(snapshots) = &mut metadata.snapshots {
+                    snapshots.push(snapshot);
+                    metadata.current_snapshot_id = Some(snapshots.len() as i64)
+                } else {
+                    metadata.snapshots = Some(vec![snapshot]);
+                    metadata.current_snapshot_id = Some(0i64)
+                }
+            }
+            Metadata::V2(metadata) => {
+                let snapshot = SnapshotV2 {
+                    snapshot_id,
+                    parent_snapshot_id: metadata.current_snapshot_id,
+                    sequence_number: metadata.last_sequence_number + 1,
+                    timestamp_ms: SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as i64,
+                    manifest_list: metadata.location.to_string()
+                        + "/metadata/snap-"
+                        + &snapshot_id.to_string()
+                        + &uuid::Uuid::new_v4().to_string()
+                        + ".avro",
+                    summary: Summary {
+                        operation: None,
+                        other: HashMap::new(),
+                    },
+                    schema_id: Some(metadata.current_schema_id as i64),
+                };
+                if let Some(snapshots) = &mut metadata.snapshots {
+                    snapshots.push(snapshot);
+                    metadata.current_snapshot_id = Some(snapshot_id)
+                } else {
+                    metadata.snapshots = Some(vec![snapshot]);
+                    metadata.current_snapshot_id = Some(snapshot_id)
+                }
+            }
         }
     }
 }
 
 pub(crate) async fn get_manifests(
-    metadata: &MetadataV2,
+    metadata: &Metadata,
     object_store: Arc<dyn ObjectStore>,
 ) -> Result<impl Iterator<Item = Result<ManifestFile>>> {
-    let snapshot = if let Some(snapshots) = &metadata.snapshots {
-        Ok(snapshots.last().unwrap())
-    } else {
-        Err(anyhow!("No snapshots in this table."))
-    }?;
-    let path: Path = snapshot.manifest_list.clone().into();
+    let path: Path = metadata
+        .manifest_list()
+        .ok_or_else(|| anyhow!("No snapshots in this table."))?
+        .into();
     {
         let bytes: Cursor<Vec<u8>> = Cursor::new(
             object_store
@@ -254,7 +282,7 @@ mod tests {
     use object_store::{memory::InMemory, ObjectStore};
 
     use crate::{
-        model::schema::{AllType, PrimitiveType, SchemaV2, Struct, StructField},
+        model::schema::{AllType, PrimitiveType, SchemaStruct, SchemaV2, StructField},
         table::table_builder::TableBuilder,
     };
 
@@ -265,7 +293,7 @@ mod tests {
             schema_id: 1,
             identifier_field_ids: Some(vec![1, 2]),
             name_mapping: None,
-            struct_fields: Struct {
+            struct_fields: SchemaStruct {
                 fields: vec![
                     StructField {
                         id: 1,

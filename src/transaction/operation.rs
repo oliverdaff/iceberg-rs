@@ -2,16 +2,17 @@
  * Defines the different [Operation]s on a [Table].
 */
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use object_store::path::Path;
 
 use crate::{
     model::{
         manifest::{
-            Content, DataFileV2, FileFormat, ManifestEntry, ManifestEntryV2, PartitionValues,
-            Status,
+            Content, DataFileV1, DataFileV2, FileFormat, ManifestEntry, ManifestEntryV1,
+            ManifestEntryV2, PartitionValues, Status,
         },
         manifest_list::{FieldSummary, ManifestFile, ManifestFileV2},
+        metadata::Metadata,
         schema::SchemaV2,
     },
     table::Table,
@@ -58,56 +59,105 @@ impl Operation {
                 let object_store = table.object_store();
                 let table_metadata = table.metadata();
                 let manifest_list_location: Path = table_metadata
-                    .snapshots
-                    .as_ref()
-                    .map(|snapshots| snapshots.last().unwrap().manifest_list.clone())
-                    .unwrap()
+                    .manifest_list()
+                    .ok_or_else(|| anyhow!("No manifest list in table metadata."))?
                     .into();
-                let manifest_schema = apache_avro::Schema::parse_str(&ManifestEntry::schema(
-                    &PartitionValues::schema(
-                        &table_metadata.default_spec(),
-                        table_metadata.current_schema(),
-                    )?,
-                    &table_metadata.format_version,
-                ))?;
-                let mut manifest_writer = apache_avro::Writer::new(&manifest_schema, Vec::new());
-                for path in paths {
-                    let manifest_entry = ManifestEntry(ManifestEntryV2 {
-                        status: Status::Added,
-                        snapshot_id: table_metadata.current_snapshot_id,
-                        sequence_number: table_metadata
-                            .snapshots
-                            .as_ref()
-                            .map(|snapshots| snapshots.last().unwrap().sequence_number),
-                        data_file: DataFileV2 {
-                            content: Content::Data,
-                            file_path: path,
-                            file_format: FileFormat::Parquet,
-                            partition: PartitionValues::from_iter(
-                                table_metadata
-                                    .default_spec()
-                                    .fields
-                                    .iter()
-                                    .map(|field| (field.name.to_owned(), None)),
-                            ),
-                            record_count: 4,
-                            file_size_in_bytes: 1200,
-                            column_sizes: None,
-                            value_counts: None,
-                            null_value_counts: None,
-                            nan_value_counts: None,
-                            distinct_counts: None,
-                            lower_bounds: None,
-                            upper_bounds: None,
-                            key_metadata: None,
-                            split_offsets: None,
-                            equality_ids: None,
-                            sort_order_id: None,
-                        },
-                    });
-                    manifest_writer.append_ser(manifest_entry)?;
-                }
-                let manifest_bytes = manifest_writer.into_inner()?;
+                let manifest_bytes = match table_metadata {
+                    Metadata::V1(metadata) => {
+                        let manifest_schema =
+                            apache_avro::Schema::parse_str(&ManifestEntry::schema(
+                                &PartitionValues::schema(
+                                    table_metadata.default_spec(),
+                                    table_metadata.current_schema(),
+                                )?,
+                                &table_metadata.format_version(),
+                            ))?;
+                        let mut manifest_writer =
+                            apache_avro::Writer::new(&manifest_schema, Vec::new());
+                        for path in paths {
+                            let manifest_entry = ManifestEntryV1 {
+                                status: Status::Added,
+                                snapshot_id: metadata.current_snapshot_id.unwrap_or(1),
+                                data_file: DataFileV1 {
+                                    file_path: path,
+                                    file_format: FileFormat::Parquet,
+                                    partition: PartitionValues::from_iter(
+                                        table_metadata
+                                            .default_spec()
+                                            .iter()
+                                            .map(|field| (field.name.to_owned(), None)),
+                                    ),
+                                    record_count: 4,
+                                    file_size_in_bytes: 1200,
+                                    block_size_in_bytes: 400,
+                                    file_ordinal: None,
+                                    sort_columns: None,
+                                    column_sizes: None,
+                                    value_counts: None,
+                                    null_value_counts: None,
+                                    nan_value_counts: None,
+                                    distinct_counts: None,
+                                    lower_bounds: None,
+                                    upper_bounds: None,
+                                    key_metadata: None,
+                                    split_offsets: None,
+                                    sort_order_id: None,
+                                },
+                            };
+                            manifest_writer.append_ser(manifest_entry)?;
+                        }
+                        manifest_writer.into_inner()?
+                    }
+                    Metadata::V2(metadata) => {
+                        let manifest_schema =
+                            apache_avro::Schema::parse_str(&ManifestEntry::schema(
+                                &PartitionValues::schema(
+                                    table_metadata.default_spec(),
+                                    table_metadata.current_schema(),
+                                )?,
+                                &table_metadata.format_version(),
+                            ))?;
+                        let mut manifest_writer =
+                            apache_avro::Writer::new(&manifest_schema, Vec::new());
+                        for path in paths {
+                            let manifest_entry = ManifestEntry::V2(ManifestEntryV2 {
+                                status: Status::Added,
+                                snapshot_id: metadata.current_snapshot_id,
+                                sequence_number: metadata
+                                    .snapshots
+                                    .as_ref()
+                                    .map(|snapshots| snapshots.last().unwrap().sequence_number),
+                                data_file: DataFileV2 {
+                                    content: Content::Data,
+                                    file_path: path,
+                                    file_format: FileFormat::Parquet,
+                                    partition: PartitionValues::from_iter(
+                                        table_metadata
+                                            .default_spec()
+                                            .iter()
+                                            .map(|field| (field.name.to_owned(), None)),
+                                    ),
+                                    record_count: 4,
+                                    file_size_in_bytes: 1200,
+                                    column_sizes: None,
+                                    value_counts: None,
+                                    null_value_counts: None,
+                                    nan_value_counts: None,
+                                    distinct_counts: None,
+                                    lower_bounds: None,
+                                    upper_bounds: None,
+                                    key_metadata: None,
+                                    split_offsets: None,
+                                    equality_ids: None,
+                                    sort_order_id: None,
+                                },
+                            });
+                            manifest_writer.append_ser(manifest_entry)?;
+                        }
+                        manifest_writer.into_inner()?
+                    }
+                };
+
                 let manifest_location: Path = (manifest_list_location
                     .to_string()
                     .trim_end_matches(".avro")
@@ -118,28 +168,20 @@ impl Operation {
                     .put(&manifest_location, manifest_bytes.into())
                     .await?;
                 let manifest_list_schema = apache_avro::Schema::parse_str(&ManifestFile::schema(
-                    &table_metadata.format_version,
+                    &table_metadata.format_version(),
                 ))?;
                 let mut manifest_list_writer =
                     apache_avro::Writer::new(&manifest_list_schema, Vec::new());
-                match &table_metadata.snapshots {
-                    Some(snapshots) => {
-                        if snapshots.len() > 1 {
-                            let old_manifest_location: Path =
-                                snapshots[snapshots.len() - 2].manifest_list.clone().into();
-                            let bytes: Vec<u8> = object_store
-                                .get(&old_manifest_location)
-                                .await?
-                                .bytes()
-                                .await?
-                                .into();
-                            let reader = apache_avro::Reader::new(&*bytes)?;
-                            manifest_list_writer.extend(reader.filter_map(Result::ok))?;
-                        }
+                match table_metadata.old_manifest_list() {
+                    Some(old_manifest_location) => {
+                        let path = old_manifest_location.into();
+                        let bytes: Vec<u8> = object_store.get(&path).await?.bytes().await?.into();
+                        let reader = apache_avro::Reader::new(&*bytes)?;
+                        manifest_list_writer.extend(reader.filter_map(Result::ok))?;
                     }
                     None => (),
                 };
-                let manifest_file = ManifestFile(ManifestFileV2 {
+                let manifest_file = ManifestFile::V2(ManifestFileV2 {
                     manifest_path: manifest_location.to_string(),
                     manifest_length: 1200,
                     partition_spec_id: 0,
@@ -164,10 +206,8 @@ impl Operation {
                 manifest_list_writer.append_ser(manifest_file)?;
                 let manifest_list_bytes = manifest_list_writer.into_inner()?;
                 let manifest_list_location: Path = table_metadata
-                    .snapshots
-                    .as_ref()
-                    .map(|snapshots| snapshots.last().unwrap().manifest_list.clone())
-                    .unwrap()
+                    .manifest_list()
+                    .ok_or_else(|| anyhow!("No manifest list in table metadata."))?
                     .into();
                 object_store
                     .put(&manifest_list_location, manifest_list_bytes.into())
@@ -187,7 +227,7 @@ mod tests {
     use object_store::{memory::InMemory, ObjectStore};
 
     use crate::{
-        model::schema::{AllType, PrimitiveType, SchemaV2, Struct, StructField},
+        model::schema::{AllType, PrimitiveType, SchemaStruct, SchemaV2, StructField},
         table::table_builder::TableBuilder,
     };
 
@@ -198,7 +238,7 @@ mod tests {
             schema_id: 1,
             identifier_field_ids: Some(vec![1, 2]),
             name_mapping: None,
-            struct_fields: Struct {
+            struct_fields: SchemaStruct {
                 fields: vec![
                     StructField {
                         id: 1,

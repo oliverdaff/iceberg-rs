@@ -16,7 +16,7 @@ impl DataFusionTable {
                         min_value: None,
                         distinct_count: None
                     };
-                    self.schema().struct_fields.fields.len()
+                    self.schema().fields.len()
                 ]),
                 is_exact: true,
             }),
@@ -25,7 +25,8 @@ impl DataFusionTable {
                 Ok(Statistics {
                     num_rows: acc
                         .num_rows
-                        .map(|num_rows| num_rows + x.added_files_count as usize),
+                        .zip(x.added_files_count())
+                        .map(|(num_rows, added_files_count)| num_rows + added_files_count as usize),
                     total_byte_size: None,
                     column_statistics: Some(vec![
                         ColumnStatistics {
@@ -34,7 +35,7 @@ impl DataFusionTable {
                             min_value: None,
                             distinct_count: None
                         };
-                        self.schema().struct_fields.fields.len()
+                        self.schema().fields.len()
                     ]),
                     is_exact: true,
                 })

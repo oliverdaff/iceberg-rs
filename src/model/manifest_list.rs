@@ -23,53 +23,12 @@ pub struct FieldSummary {
 }
 
 /// Entry in manifest file.
-#[derive(Debug, PartialEq, Clone)]
-pub struct ManifestFile(pub ManifestFileV2);
-
-impl core::ops::Deref for ManifestFile {
-    type Target = ManifestFileV2;
-
-    fn deref(self: &'_ Self) -> &'_ Self::Target {
-        &self.0
-    }
-}
-
-impl core::ops::DerefMut for ManifestFile {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-/// Serialize for PrimitiveType wit special handling for
-/// Decimal and Fixed types.
-impl Serialize for ManifestFile {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.0.serialize(serializer)
-    }
-}
-
-/// Serialize for PrimitiveType wit special handling for
-/// Decimal and Fixed types.
-impl<'de> Deserialize<'de> for ManifestFile {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let entry = ManifestFileVersion::deserialize(deserializer)?;
-        match entry {
-            ManifestFileVersion::V1(entry) => Ok(ManifestFile(entry.into())),
-            ManifestFileVersion::V2(entry) => Ok(ManifestFile(entry)),
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(untagged)]
-enum ManifestFileVersion {
+pub enum ManifestFile {
+    /// Version 2 of the manifest file
     V2(ManifestFileV2),
+    /// Version 1 of the manifest file
     V1(ManifestFileV1),
 }
 
@@ -436,6 +395,34 @@ impl ManifestFile {
             .to_owned(),
         }
     }
+    /// Location of the manifest file
+    pub fn manifest_path(&self) -> &str {
+        match self {
+            ManifestFile::V1(file) => &file.manifest_path,
+            ManifestFile::V2(file) => &file.manifest_path,
+        }
+    }
+    /// ID of a partition spec used to write the manifest; must be listed in table metadata partition-specs
+    pub fn partition_spec_id(&self) -> i32 {
+        match self {
+            ManifestFile::V1(file) => file.partition_spec_id,
+            ManifestFile::V2(file) => file.partition_spec_id,
+        }
+    }
+    /// A list of field summaries for each partition field in the spec. Each field in the list corresponds to a field in the manifest file’s partition spec.
+    pub fn partitions(&self) -> &std::option::Option<Vec<FieldSummary>> {
+        match self {
+            ManifestFile::V1(file) => &file.partitions,
+            ManifestFile::V2(file) => &file.partitions,
+        }
+    }
+    /// Number of entries in the manifest that have status ADDED (1), when null this is assumed to be non-zero
+    pub fn added_files_count(&self) -> std::option::Option<i32> {
+        match self {
+            ManifestFile::V1(file) => file.added_files_count,
+            ManifestFile::V2(file) => Some(file.added_files_count),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -444,7 +431,7 @@ mod tests {
 
     #[test]
     pub fn test_roundtrip() {
-        let manifest_file = ManifestFile(ManifestFileV2 {
+        let manifest_file = ManifestFile::V2(ManifestFileV2 {
             manifest_path: "".to_string(),
             manifest_length: 1200,
             partition_spec_id: 0,

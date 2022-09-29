@@ -59,9 +59,9 @@ impl<'table> Transaction<'table> {
         match (table.catalog(), table.identifier()) {
             (Some(catalog), Some(identifier)) => {
                 let object_store = catalog.object_store();
-                let location = &table.metadata().location;
+                let location = &table.metadata().location();
                 let transaction_uuid = Uuid::new_v4();
-                let version = &table.metadata().last_sequence_number;
+                let version = &table.metadata().last_sequence_number();
                 let metadata_json = serde_json::to_string(&table.metadata())
                     .map_err(|err| anyhow!(err.to_string()))?;
                 let metadata_file_location: Path = (location.to_string()
@@ -89,9 +89,9 @@ impl<'table> Transaction<'table> {
             }
             (_, _) => {
                 let object_store = table.object_store();
-                let location = &table.metadata().location;
+                let location = &table.metadata().location();
                 let uuid = Uuid::new_v4();
-                let version = &table.metadata().last_sequence_number;
+                let version = &table.metadata().last_sequence_number();
                 let metadata_json = serde_json::to_string(&table.metadata())
                     .map_err(|err| anyhow!(err.to_string()))?;
                 let temp_path: Path =

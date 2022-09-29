@@ -31,6 +31,8 @@ use crate::{
     table::Table,
 };
 
+use self::schema::iceberg_to_arrow_schema;
+
 mod pruning_statistics;
 mod schema;
 mod statistics;
@@ -65,7 +67,7 @@ impl TableProvider for DataFusionTable {
         self
     }
     fn schema(&self) -> SchemaRef {
-        Arc::new(self.0.schema().try_into().unwrap())
+        Arc::new(iceberg_to_arrow_schema(self.0.schema()).unwrap())
     }
     fn table_type(&self) -> TableType {
         TableType::Base
@@ -79,7 +81,7 @@ impl TableProvider for DataFusionTable {
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
         let schema = self.schema();
 
-        let object_store_url = ObjectStoreUrl::parse(&self.metadata().location)?;
+        let object_store_url = ObjectStoreUrl::parse(&self.metadata().location())?;
         let url: &Url = object_store_url.as_ref();
         session.runtime_env.register_object_store(
             url.scheme(),
@@ -105,8 +107,7 @@ impl TableProvider for DataFusionTable {
                 .for_each(|(manifest, prune_file)| {
                     if !prune_file {
                         let partition_values = manifest
-                            .data_file
-                            .partition
+                            .partition_values()
                             .iter()
                             .map(|value| match value {
                                 Some(v) => v.into(),
@@ -114,20 +115,14 @@ impl TableProvider for DataFusionTable {
                             })
                             .collect::<Vec<ScalarValue>>();
                         let object_meta = ObjectMeta {
-                            location: manifest.data_file.file_path.into(),
-                            size: manifest.data_file.file_size_in_bytes as usize,
-                            last_modified: self
-                                .metadata()
-                                .current_snapshot()
-                                .map(|snapshot| {
-                                    let secs = snapshot.timestamp_ms / 1000;
-                                    let nsecs = (snapshot.timestamp_ms % 1000) as u32 * 1000000;
-                                    DateTime::from_utc(
-                                        NaiveDateTime::from_timestamp(secs, nsecs),
-                                        Utc,
-                                    )
-                                })
-                                .unwrap_or(Utc::now()),
+                            location: manifest.file_path().into(),
+                            size: manifest.file_size_in_bytes() as usize,
+                            last_modified: {
+                                let last_updated_ms = self.metadata().last_updated_ms();
+                                let secs = last_updated_ms / 1000;
+                                let nsecs = (last_updated_ms % 1000) as u32 * 1000000;
+                                DateTime::from_utc(NaiveDateTime::from_timestamp(secs, nsecs), Utc)
+                            },
                         };
                         let file = PartitionedFile {
                             object_meta,
@@ -151,8 +146,7 @@ impl TableProvider for DataFusionTable {
                 .map_err(|err| DataFusionError::Internal(format!("{}", err)))?;
             files.into_iter().for_each(|manifest| {
                 let partition_values = manifest
-                    .data_file
-                    .partition
+                    .partition_values()
                     .iter()
                     .map(|value| match value {
                         Some(v) => v.into(),
@@ -160,17 +154,14 @@ impl TableProvider for DataFusionTable {
                     })
                     .collect::<Vec<ScalarValue>>();
                 let object_meta = ObjectMeta {
-                    location: manifest.data_file.file_path.into(),
-                    size: manifest.data_file.file_size_in_bytes as usize,
-                    last_modified: self
-                        .metadata()
-                        .current_snapshot()
-                        .map(|snapshot| {
-                            let secs = snapshot.timestamp_ms / 1000;
-                            let nsecs = (snapshot.timestamp_ms % 1000) as u32 * 1000000;
-                            DateTime::from_utc(NaiveDateTime::from_timestamp(secs, nsecs), Utc)
-                        })
-                        .unwrap_or(Utc::now()),
+                    location: manifest.file_path().into(),
+                    size: manifest.file_size_in_bytes() as usize,
+                    last_modified: {
+                        let last_updated_ms = self.metadata().last_updated_ms();
+                        let secs = last_updated_ms / 1000;
+                        let nsecs = (last_updated_ms % 1000) as u32 * 1000000;
+                        DateTime::from_utc(NaiveDateTime::from_timestamp(secs, nsecs), Utc)
+                    },
                 };
                 let file = PartitionedFile {
                     object_meta,
@@ -193,7 +184,6 @@ impl TableProvider for DataFusionTable {
         let table_partition_cols = self
             .metadata()
             .default_spec()
-            .fields
             .iter()
             .map(|field| field.name.clone())
             .collect();
@@ -210,5 +200,45 @@ impl TableProvider for DataFusionTable {
         ParquetFormat::default()
             .create_physical_plan(file_scan_config, filters)
             .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use datafusion::{
+        arrow::{self, record_batch::RecordBatch},
+        prelude::SessionContext,
+    };
+    use object_store::{local::LocalFileSystem, ObjectStore};
+
+    use super::*;
+
+    #[tokio::test]
+    pub async fn test_datafusion_scan() {
+        let object_store: Arc<dyn ObjectStore> = Arc::new(
+            LocalFileSystem::new_with_prefix("/home/jan/workspace/rust/iceberg-rs").unwrap(),
+        );
+        let table: Arc<dyn TableProvider> = Arc::new(DataFusionTable::from(
+            Table::load_file_system_table("tests/data/nyc/taxis", &object_store)
+                .await
+                .unwrap(),
+        ));
+
+        let ctx = SessionContext::new();
+
+        ctx.register_table("nyc_taxis", table).unwrap();
+
+        let df = ctx
+            .sql("SELECT vendor_id, MIN(trip_distance) FROM nyc_taxis GROUP BY vendor_id LIMIT 100")
+            .await
+            .unwrap();
+
+        // execute the plan
+        let results: Vec<RecordBatch> = df.collect().await.expect("Failed to execute query plan.");
+
+        // format the results
+        let pretty_results = arrow::util::pretty::pretty_format_batches(&results)
+            .expect("Failed to print result")
+            .to_string();
     }
 }

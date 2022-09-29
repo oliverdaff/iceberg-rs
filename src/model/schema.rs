@@ -180,7 +180,7 @@ pub enum AllType {
     /// All the primitive types
     Primitive(PrimitiveType),
     /// A Struct type
-    Struct(Struct),
+    Struct(SchemaStruct),
     /// A List type.
     List(List),
     /// A Map type
@@ -205,18 +205,15 @@ impl fmt::Display for AllType {
 /// Each field can be either optional or required, meaning that values can (or cannot) be null.
 /// Fields may be any type.
 /// Fields may have an optional comment or doc string.
-pub struct Struct {
+pub struct SchemaStruct {
     /// The fields of the struct.
     pub fields: Vec<StructField>,
 }
 
-impl Struct {
+impl SchemaStruct {
     /// Get structfield at certain index
     pub fn get(&self, index: usize) -> Option<&StructField> {
-        self.fields
-            .iter()
-            .filter(|field| field.id as usize == index)
-            .next()
+        self.fields.iter().find(|field| field.id as usize == index)
     }
 }
 
@@ -250,7 +247,7 @@ pub struct SchemaV2 {
 
     #[serde(flatten)]
     /// The struct fields
-    pub struct_fields: Struct,
+    pub struct_fields: SchemaStruct,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -267,7 +264,7 @@ pub struct SchemaV1 {
 
     #[serde(flatten)]
     /// The struct fields
-    pub struct_fields: Struct,
+    pub struct_fields: SchemaStruct,
 }
 
 impl From<SchemaV1> for SchemaV2 {
@@ -347,13 +344,13 @@ mod tests {
             "fields": []
         }
         "#;
-        assert!(serde_json::from_str::<Struct>(&data).is_ok());
+        assert!(serde_json::from_str::<SchemaStruct>(&data).is_ok());
         let data = r#"
         {
             "type" : "anyother"            
         }
         "#;
-        assert!(serde_json::from_str::<Struct>(data).is_err());
+        assert!(serde_json::from_str::<SchemaStruct>(data).is_err());
     }
 
     #[test]

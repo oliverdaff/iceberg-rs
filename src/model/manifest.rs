@@ -15,7 +15,9 @@ use serde::{
 use serde_bytes::ByteBuf;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use super::{metadata::FormatVersion, partition::PartitionSpec, schema::SchemaV2, types::Value};
+use super::{
+    metadata::FormatVersion, partition::PartitionField, schema::SchemaStruct, types::Value,
+};
 
 /// Details of a manifest file
 pub struct Manifest {
@@ -57,54 +59,13 @@ pub enum Status {
     Deleted = 2,
 }
 
-/// Entry in manifest file.
-#[derive(Debug, PartialEq, Clone)]
-pub struct ManifestEntry(pub ManifestEntryV2);
-
-impl core::ops::Deref for ManifestEntry {
-    type Target = ManifestEntryV2;
-
-    fn deref(self: &'_ Self) -> &'_ Self::Target {
-        &self.0
-    }
-}
-
-impl core::ops::DerefMut for ManifestEntry {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-/// Serialize for PrimitiveType wit special handling for
-/// Decimal and Fixed types.
-impl Serialize for ManifestEntry {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        self.0.serialize(serializer)
-    }
-}
-
-/// Serialize for PrimitiveType wit special handling for
-/// Decimal and Fixed types.
-impl<'de> Deserialize<'de> for ManifestEntry {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let entry = ManifestEntryVersion::deserialize(deserializer)?;
-        match entry {
-            ManifestEntryVersion::V1(entry) => Ok(ManifestEntry(entry.into())),
-            ManifestEntryVersion::V2(entry) => Ok(ManifestEntry(entry)),
-        }
-    }
-}
-
+/// Entry in manifest
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 #[serde(untagged)]
-enum ManifestEntryVersion {
+pub enum ManifestEntry {
+    /// Manifest entry version 2
     V2(ManifestEntryV2),
+    /// Manifest entry version 1
     V1(ManifestEntryV1),
 }
 
@@ -150,7 +111,7 @@ impl ManifestEntry {
     pub fn schema(partition_schema: &str, format_version: &FormatVersion) -> String {
         match format_version {
             FormatVersion::V1 => {
-                let datafile_schema = DataFileV2::schemav1(partition_schema);
+                let datafile_schema = DataFileV1::schema(partition_schema);
                 r#"{
             "type": "record",
             "name": "manifest_entry",
@@ -177,7 +138,7 @@ impl ManifestEntry {
         }"#
             }
             FormatVersion::V2 => {
-                let datafile_schema = DataFileV2::schemav2(partition_schema);
+                let datafile_schema = DataFileV2::schema(partition_schema);
                 r#"{
             "type": "record",
             "name": "manifest_entry",
@@ -216,6 +177,48 @@ impl ManifestEntry {
             ]
         }"#
             }
+        }
+    }
+    /// Partition data tuple, schema based on the partition spec output using partition field ids for the struct field ids
+    pub fn partition_values(&self) -> &PartitionValues {
+        match self {
+            ManifestEntry::V1(entry) => &entry.data_file.partition,
+            ManifestEntry::V2(entry) => &entry.data_file.partition,
+        }
+    }
+    /// Full URI for the file with a FS scheme.
+    pub fn file_path(&self) -> &str {
+        match self {
+            ManifestEntry::V1(entry) => &entry.data_file.file_path,
+            ManifestEntry::V2(entry) => &entry.data_file.file_path,
+        }
+    }
+    /// Total file size in bytes
+    pub fn file_size_in_bytes(&self) -> i64 {
+        match self {
+            ManifestEntry::V1(entry) => entry.data_file.file_size_in_bytes,
+            ManifestEntry::V2(entry) => entry.data_file.file_size_in_bytes,
+        }
+    }
+    /// Map from column id to lower bound in the column
+    pub fn lower_bounds(&self) -> &Option<AvroMap<ByteBuf>> {
+        match self {
+            ManifestEntry::V1(entry) => &entry.data_file.lower_bounds,
+            ManifestEntry::V2(entry) => &entry.data_file.lower_bounds,
+        }
+    }
+    /// Map from column id to upper bound in the column
+    pub fn upper_bounds(&self) -> &Option<AvroMap<ByteBuf>> {
+        match self {
+            ManifestEntry::V1(entry) => &entry.data_file.upper_bounds,
+            ManifestEntry::V2(entry) => &entry.data_file.upper_bounds,
+        }
+    }
+    /// Map from column id to number of null values
+    pub fn null_value_counts(&self) -> &Option<AvroMap<i64>> {
+        match self {
+            ManifestEntry::V1(entry) => &entry.data_file.null_value_counts,
+            ManifestEntry::V2(entry) => &entry.data_file.null_value_counts,
         }
     }
 }
@@ -291,13 +294,11 @@ pub struct PartitionValues {
 
 impl PartitionValues {
     /// Get the schema of the partition value struct depending on the partition spec and the table schema
-    pub fn schema(spec: &PartitionSpec, table_schema: &SchemaV2) -> Result<String> {
+    pub fn schema(spec: &[PartitionField], table_schema: &SchemaStruct) -> Result<String> {
         Ok(spec
-            .fields
             .iter()
             .map(|field| {
                 let schema_field = table_schema
-                    .struct_fields
                     .get(field.source_id as usize)
                     .ok_or_else(|| anyhow!("Column {} not in table schema.", &field.source_id))?;
                 Ok::<_, anyhow::Error>(
@@ -323,7 +324,7 @@ impl PartitionValues {
                     Ok(result)
                 },
             )?
-            .trim_end_matches(",")
+            .trim_end_matches(',')
             .to_owned()
             + r#"]}"#)
     }
@@ -354,12 +355,7 @@ impl Serialize for PartitionValues {
     {
         let mut record = serializer.serialize_struct("r102", self.fields.len())?;
         for (i, value) in self.fields.iter().enumerate() {
-            let (key, _) = self
-                .lookup
-                .iter()
-                .filter(|(_, value)| **value == i)
-                .next()
-                .unwrap();
+            let (key, _) = self.lookup.iter().find(|(_, value)| **value == i).unwrap();
             record.serialize_field(Box::leak(key.clone().into_boxed_str()), value)?;
         }
         record.end()
@@ -392,10 +388,7 @@ impl<'de> Deserialize<'de> for PartitionValues {
                     lookup.insert(key, index);
                     index += 1;
                 }
-                Ok(PartitionValues {
-                    fields,
-                    lookup: lookup,
-                })
+                Ok(PartitionValues { fields, lookup })
             }
         }
         deserializer.deserialize_struct(
@@ -561,9 +554,9 @@ impl From<DataFileV1> for DataFileV2 {
     }
 }
 
-impl DataFileV2 {
+impl DataFileV1 {
     /// Get schema
-    pub fn schemav1(partition_schema: &str) -> String {
+    pub fn schema(partition_schema: &str) -> String {
         r#"{
             "type": "record",
             "name": "r2",
@@ -853,8 +846,11 @@ impl DataFileV2 {
             ]
         }"#
     }
+}
+
+impl DataFileV2 {
     /// Get schema
-    pub fn schemav2(partition_schema: &str) -> String {
+    pub fn schema(partition_schema: &str) -> String {
         r#"{
             "type": "record",
             "name": "r2",
@@ -1185,8 +1181,8 @@ fn read_manifest_entry<R: std::io::Read>(
 #[cfg(test)]
 mod tests {
     use crate::model::{
-        partition::{PartitionField, Transform},
-        schema::{AllType, PrimitiveType, Struct, StructField},
+        partition::{PartitionField, PartitionSpec, Transform},
+        schema::{AllType, PrimitiveType, SchemaStruct, SchemaV2, StructField},
     };
 
     use super::*;
@@ -1206,7 +1202,7 @@ mod tests {
             snapshot_id in prop::option::of(any::<i64>()),
             sequence_number in prop::option::of(any::<i64>())
         )  -> ManifestEntry{
-            ManifestEntry(ManifestEntryV2{
+            ManifestEntry::V2(ManifestEntryV2{
                 status,
                 snapshot_id,
                 sequence_number,
@@ -1241,7 +1237,7 @@ mod tests {
                     schema_id: 0,
                     identifier_field_ids: None,
                     name_mapping: None,
-                    struct_fields: Struct {
+                    struct_fields: SchemaStruct {
                         fields: vec![StructField {
                             id: 4,
                             name: "day".to_owned(),
@@ -1262,7 +1258,7 @@ mod tests {
                     }],
                 };
 
-                let partition_schema = PartitionValues::schema(&spec, &table_schema).unwrap();
+                let partition_schema = PartitionValues::schema(&spec.fields, &table_schema.struct_fields).unwrap();
 
                 let raw_schema = ManifestEntry::schema(&partition_schema, &FormatVersion::V2);
 
@@ -1315,7 +1311,7 @@ mod tests {
                     schema_id: 0,
                     identifier_field_ids: None,
                     name_mapping: None,
-                    struct_fields: Struct {
+                    struct_fields: SchemaStruct {
                         fields: vec![StructField {
                             id: 4,
                             name: "day".to_owned(),
@@ -1336,7 +1332,7 @@ mod tests {
                     }],
                 };
 
-                let partition_schema = PartitionValues::schema(&spec, &table_schema).unwrap();
+                let partition_schema = PartitionValues::schema(&spec.fields, &table_schema.struct_fields).unwrap();
 
             let raw_schema = ManifestEntry::schema(&partition_schema, &FormatVersion::V2);
 
@@ -1391,7 +1387,7 @@ mod tests {
             schema_id: 0,
             identifier_field_ids: None,
             name_mapping: None,
-            struct_fields: Struct {
+            struct_fields: SchemaStruct {
                 fields: vec![StructField {
                     id: 4,
                     name: "day".to_owned(),
@@ -1412,7 +1408,7 @@ mod tests {
             }],
         };
 
-        let partition_schema = PartitionValues::schema(&spec, &table_schema).unwrap();
+        let partition_schema = PartitionValues::schema(&spec.fields, &table_schema.struct_fields).unwrap();
 
             let raw_schema = ManifestEntry::schema(&partition_schema, &FormatVersion::V2);
 
@@ -1453,10 +1449,7 @@ mod tests {
 
             let mut reader = apache_avro::Reader::new( &encoded[..]).unwrap();
             let metadata_entry = read_manifest_entry(&mut reader).unwrap();
-            assert_eq!(a.status, metadata_entry.status);
-            assert_eq!(a.snapshot_id, metadata_entry.snapshot_id);
-            assert_eq!(a.sequence_number, metadata_entry.sequence_number);
-            assert_eq!(a.data_file.partition, metadata_entry.data_file.partition);
+            assert_eq!(a, metadata_entry);
     }
 
     }
@@ -1470,7 +1463,7 @@ mod tests {
             schema_id: 0,
             identifier_field_ids: None,
             name_mapping: None,
-            struct_fields: Struct {
+            struct_fields: SchemaStruct {
                 fields: vec![StructField {
                     id: 4,
                     name: "day".to_owned(),
@@ -1491,7 +1484,10 @@ mod tests {
             }],
         };
 
-        let raw_schema = PartitionValues::schema(&spec, &table_schema).unwrap();
+        let raw_schema =
+            PartitionValues::schema(&spec.fields, &table_schema.struct_fields).unwrap();
+
+        dbg!(&raw_schema);
 
         let schema = apache_avro::Schema::parse_str(&raw_schema).unwrap();
 

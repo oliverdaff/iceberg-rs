@@ -55,9 +55,7 @@ impl Table {
     }
 }
 
-fn filter_manifest<'list>(
-    (manifest, predicate): (&'list ManifestFile, bool),
-) -> Option<&'list ManifestFile> {
+fn filter_manifest((manifest, predicate): (&ManifestFile, bool)) -> Option<&ManifestFile> {
     if predicate {
         Some(manifest)
     } else {
@@ -73,19 +71,23 @@ fn avro_value_to_manifest_entry(
         .map_err(anyhow::Error::msg)
 }
 
+type ManifestListIter<'list> = FilterMap<
+    Zip<Iter<'list, ManifestFile>, Box<dyn Iterator<Item = bool> + Send + Sync>>,
+    fn((&'list ManifestFile, bool)) -> Option<&'list ManifestFile>,
+>;
+
+type ManifestIter<'manifest> = Option<
+    Map<
+        Reader<'manifest, Cursor<Vec<u8>>>,
+        fn(Result<AvroValue, apache_avro::Error>) -> Result<ManifestEntry, anyhow::Error>,
+    >,
+>;
+
 /// Iterator over all files in a given snapshot
 pub struct DataFileStream<'list, 'manifest> {
     object_store: Arc<dyn ObjectStore>,
-    manifest_list_iter: FilterMap<
-        Zip<Iter<'list, ManifestFile>, Box<dyn Iterator<Item = bool> + Send + Sync>>,
-        fn((&'list ManifestFile, bool)) -> Option<&'list ManifestFile>,
-    >,
-    manifest_iter: Option<
-        Map<
-            Reader<'manifest, Cursor<Vec<u8>>>,
-            fn(Result<AvroValue, apache_avro::Error>) -> Result<ManifestEntry, anyhow::Error>,
-        >,
-    >,
+    manifest_list_iter: ManifestListIter<'list>,
+    manifest_iter: ManifestIter<'manifest>,
 }
 
 impl<'list, 'manifest> Stream for DataFileStream<'list, 'manifest> {
@@ -101,7 +103,7 @@ impl<'list, 'manifest> Stream for DataFileStream<'list, 'manifest> {
                 match next {
                     Some(file) => {
                         let object_store = Arc::clone(&self.object_store);
-                        let path: Path = file.manifest_path.clone().into();
+                        let path: Path = file.manifest_path().into();
                         let result = object_store.get(&path).and_then(|file| file.bytes());
                         let temp = match Pin::as_mut(&mut Box::pin(result)).poll(cx) {
                             Poll::Ready(file) => {
@@ -138,7 +140,7 @@ mod tests {
     use object_store::{memory::InMemory, ObjectStore};
 
     use crate::{
-        model::schema::{AllType, PrimitiveType, SchemaV2, Struct, StructField},
+        model::schema::{AllType, PrimitiveType, SchemaStruct, SchemaV2, StructField},
         table::table_builder::TableBuilder,
     };
 
@@ -149,7 +151,7 @@ mod tests {
             schema_id: 1,
             identifier_field_ids: Some(vec![1, 2]),
             name_mapping: None,
-            struct_fields: Struct {
+            struct_fields: SchemaStruct {
                 fields: vec![
                     StructField {
                         id: 1,
@@ -197,7 +199,7 @@ mod tests {
             .files(None)
             .await
             .unwrap()
-            .map(|manifest_entry| manifest_entry.map(|x| x.0.data_file.file_path));
+            .map(|manifest_entry| manifest_entry.map(|x| x.file_path().to_string()));
         assert_eq!(
             files.next().await.unwrap().unwrap(),
             "test/append/data/file1.parquet".to_string()

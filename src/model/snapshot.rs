@@ -80,7 +80,7 @@ pub struct SnapshotV1 {
     /// tracks manifest files with additional metadata.
     pub manifest_list: Option<String>,
     /// A list of manifest file locations. Must be omitted if manifest-list is present
-    pub manisfests: Option<Vec<String>>,
+    pub manifests: Option<Vec<String>>,
     /// A string map that summarizes the snapshot changes, including operation.
     pub summary: Option<Summary>,
     /// ID of the table’s current schema when the snapshot was created.
@@ -94,7 +94,7 @@ impl From<SnapshotV1> for SnapshotV2 {
             parent_snapshot_id: v1.parent_snapshot_id,
             sequence_number: 0,
             timestamp_ms: v1.timestamp_ms,
-            manifest_list: v1.manifest_list.unwrap_or("".to_owned()),
+            manifest_list: v1.manifest_list.unwrap_or_else(|| "".to_owned()),
             summary: v1.summary.unwrap_or(Summary {
                 operation: None,
                 other: HashMap::new(),

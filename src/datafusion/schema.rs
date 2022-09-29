@@ -8,29 +8,24 @@ use std::collections::HashMap;
 
 use datafusion::arrow::datatypes::{DataType, Field, Schema, TimeUnit};
 
-use crate::model::schema::{AllType, PrimitiveType, SchemaV2};
+use crate::model::schema::{AllType, PrimitiveType, SchemaStruct};
 
-impl TryFrom<&SchemaV2> for Schema {
-    type Error = anyhow::Error;
-
-    fn try_from(value: &SchemaV2) -> Result<Self, Self::Error> {
-        let fields = value
-            .struct_fields
-            .fields
-            .iter()
-            .map(|field| {
-                Ok(Field::new_dict(
-                    &field.name,
-                    (&field.field_type).try_into()?,
-                    !field.required,
-                    field.id as i64,
-                    false,
-                ))
-            })
-            .collect::<Result<_, anyhow::Error>>()?;
-        let metadata = HashMap::new();
-        Ok(Schema { fields, metadata })
-    }
+pub fn iceberg_to_arrow_schema(schema: &SchemaStruct) -> Result<Schema> {
+    let fields = schema
+        .fields
+        .iter()
+        .map(|field| {
+            Ok(Field::new_dict(
+                &field.name,
+                (&field.field_type).try_into()?,
+                !field.required,
+                field.id as i64,
+                false,
+            ))
+        })
+        .collect::<Result<_, anyhow::Error>>()?;
+    let metadata = HashMap::new();
+    Ok(Schema { fields, metadata })
 }
 
 impl TryFrom<&AllType> for DataType {

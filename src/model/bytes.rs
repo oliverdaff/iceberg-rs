@@ -1,10 +1,15 @@
+/*!
+ * Helper functions to handle bytes
+*/
+
 use std::any::Any;
 
 use anyhow::{anyhow, Result};
 
 use super::schema::{AllType, PrimitiveType};
 
-pub(crate) fn bytes_to_any(bytes: &[u8], data_type: &AllType) -> Result<Box<dyn Any>> {
+/// Read bytes to concrete type and return it as any
+pub fn bytes_to_any(bytes: &[u8], data_type: &AllType) -> Result<Box<dyn Any>> {
     match data_type {
         AllType::Primitive(primitive) => match primitive {
             PrimitiveType::Boolean => {
