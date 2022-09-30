@@ -81,7 +81,9 @@ impl TableProvider for DataFusionTable {
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
         let schema = self.schema();
 
-        let object_store_url = ObjectStoreUrl::parse(&self.metadata().location())?;
+        let object_store_url = ObjectStoreUrl::parse(
+            "iceberg://".to_owned() + &self.metadata().location().replace('/', "-"),
+        )?;
         let url: &Url = object_store_url.as_ref();
         session.runtime_env.register_object_store(
             url.scheme(),
@@ -240,5 +242,7 @@ mod tests {
         let pretty_results = arrow::util::pretty::pretty_format_batches(&results)
             .expect("Failed to print result")
             .to_string();
+        dbg!(&pretty_results);
+        panic!()
     }
 }
