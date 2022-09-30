@@ -427,10 +427,11 @@ impl ManifestFile {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
-    pub fn test_roundtrip() {
+    pub fn test_manifest_list_v2() {
         let manifest_file = ManifestFile::V2(ManifestFileV2 {
             manifest_path: "".to_string(),
             manifest_length: 1200,
@@ -448,13 +449,53 @@ mod tests {
             partitions: Some(vec![FieldSummary {
                 contains_null: true,
                 contains_nan: Some(false),
-                lower_bound: None,
+                lower_bound: Some(ByteBuf::from(vec![0, 0, 0, 0])),
                 upper_bound: None,
             }]),
             key_metadata: None,
         });
 
         let raw_schema = ManifestFile::schema(&FormatVersion::V2);
+
+        let schema = apache_avro::Schema::parse_str(&raw_schema).unwrap();
+
+        let mut writer = apache_avro::Writer::new(&schema, Vec::new());
+
+        writer.append_ser(manifest_file.clone()).unwrap();
+
+        let encoded = writer.into_inner().unwrap();
+
+        let reader = apache_avro::Reader::new(&*encoded).unwrap();
+
+        for record in reader {
+            let result = apache_avro::from_value::<ManifestFile>(&record.unwrap()).unwrap();
+            assert_eq!(manifest_file, result);
+        }
+    }
+
+    #[test]
+    pub fn test_manifest_list_v1() {
+        let manifest_file = ManifestFile::V1(ManifestFileV1 {
+            manifest_path: "".to_string(),
+            manifest_length: 1200,
+            partition_spec_id: 0,
+            added_snapshot_id: 39487483032,
+            added_files_count: Some(1),
+            existing_files_count: Some(2),
+            deleted_files_count: Some(0),
+            added_rows_count: Some(1000),
+            existing_rows_count: Some(8000),
+            deleted_rows_count: Some(0),
+            partitions: Some(vec![FieldSummary {
+                contains_null: true,
+                contains_nan: Some(false),
+                lower_bound: Some(ByteBuf::from(vec![0, 0, 0, 0])),
+                upper_bound: None,
+            }]),
+            key_metadata: None,
+        });
+
+        let raw_schema = ManifestFile::schema(&FormatVersion::V1);
 
         let schema = apache_avro::Schema::parse_str(&raw_schema).unwrap();
 
