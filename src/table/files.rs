@@ -1,19 +1,12 @@
 /*!
  * Helper for iterating over files in a table.
 */
-use std::{
-    io::Cursor,
-    iter::{repeat, FilterMap, Map, Zip},
-    pin::Pin,
-    slice::Iter,
-    sync::Arc,
-    task::{Context, Poll},
-};
+use std::{io::Cursor, iter::repeat, sync::Arc};
 
 use anyhow::Result;
-use apache_avro::{types::Value as AvroValue, Reader};
-use futures::{stream, Future, Stream, StreamExt, TryFutureExt, TryStreamExt};
-use object_store::{path::Path, ObjectStore};
+use apache_avro::types::Value as AvroValue;
+use futures::{stream, StreamExt, TryFutureExt, TryStreamExt};
+use object_store::path::Path;
 
 use crate::model::{manifest::ManifestEntry, manifest_list::ManifestFile};
 
@@ -78,66 +71,6 @@ fn avro_value_to_manifest_entry(
     entry
         .and_then(|value| apache_avro::from_value(&value))
         .map_err(anyhow::Error::msg)
-}
-
-type ManifestListIter<'list> = FilterMap<
-    Zip<Iter<'list, ManifestFile>, Box<dyn Iterator<Item = bool> + Send + Sync>>,
-    fn((&'list ManifestFile, bool)) -> Option<&'list ManifestFile>,
->;
-
-type ManifestIter<'manifest> = Option<
-    Map<
-        Reader<'manifest, Cursor<Vec<u8>>>,
-        fn(Result<AvroValue, apache_avro::Error>) -> Result<ManifestEntry, anyhow::Error>,
-    >,
->;
-
-/// Iterator over all files in a given snapshot
-pub struct DataFileStream<'list, 'manifest> {
-    object_store: Arc<dyn ObjectStore>,
-    manifest_list_iter: ManifestListIter<'list>,
-    manifest_iter: ManifestIter<'manifest>,
-}
-
-impl<'list, 'manifest> Stream for DataFileStream<'list, 'manifest> {
-    type Item = Result<ManifestEntry>;
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let next = match &mut self.manifest_iter {
-            Some(manifest) => manifest.next(),
-            None => None,
-        };
-        match next {
-            None => {
-                let next = self.manifest_list_iter.next();
-                match next {
-                    Some(file) => {
-                        let object_store = Arc::clone(&self.object_store);
-                        let path: Path = file.manifest_path().into();
-                        let result = object_store.get(&path).and_then(|file| file.bytes());
-                        let temp = match Pin::as_mut(&mut Box::pin(result)).poll(cx) {
-                            Poll::Ready(file) => {
-                                let bytes = Cursor::new(Vec::from(file?));
-                                let mut reader = apache_avro::Reader::new(bytes)?;
-                                let next = reader.next();
-                                self.manifest_iter = Some(reader.map(
-                                    avro_value_to_manifest_entry
-                                        as fn(
-                                            Result<AvroValue, apache_avro::Error>,
-                                        )
-                                            -> Result<ManifestEntry, anyhow::Error>,
-                                ));
-                                Poll::Ready(next.map(avro_value_to_manifest_entry))
-                            }
-                            Poll::Pending => Poll::Pending,
-                        };
-                        temp
-                    }
-                    None => Poll::Ready(None),
-                }
-            }
-            z => Poll::Ready(z),
-        }
-    }
 }
 
 #[cfg(test)]
