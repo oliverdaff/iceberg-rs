@@ -210,12 +210,11 @@ mod tests {
 
     #[tokio::test]
     pub async fn test_datafusion_scan() {
-        let object_store: Arc<dyn ObjectStore> = Arc::new(
-            LocalFileSystem::new_with_prefix("/home/jan/workspace/rust/iceberg-rs").unwrap(),
-        );
+        let object_store: Arc<dyn ObjectStore> =
+            Arc::new(LocalFileSystem::new_with_prefix("./tests").unwrap());
 
         let table = Arc::new(DataFusionTable::from(
-            Table::load_file_system_table("tests/data/nyc/taxis", &object_store)
+            Table::load_file_system_table("/home/iceberg/warehouse/nyc/taxis", &object_store)
                 .await
                 .unwrap(),
         ));
