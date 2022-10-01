@@ -4,7 +4,6 @@
 
 use anyhow::Result;
 use chrono::{naive::NaiveDateTime, DateTime, Utc};
-use futures::TryStreamExt;
 use object_store::ObjectMeta;
 use std::{any::Any, collections::HashMap, ops::DerefMut, sync::Arc};
 
@@ -98,9 +97,6 @@ impl TableProvider for DataFusionTable {
             let files = self
                 .files(Some(manifests_to_prune))
                 .await
-                .map_err(|err| DataFusionError::Internal(format!("{}", err)))?
-                .try_collect::<Vec<_>>()
-                .await
                 .map_err(|err| DataFusionError::Internal(format!("{}", err)))?;
             let files_to_prune = pruning_predicate.prune(&PruneDataFiles::new(self, &files))?;
             files
@@ -141,9 +137,6 @@ impl TableProvider for DataFusionTable {
         } else {
             let files = self
                 .files(None)
-                .await
-                .map_err(|err| DataFusionError::Internal(format!("{}", err)))?
-                .try_collect::<Vec<_>>()
                 .await
                 .map_err(|err| DataFusionError::Internal(format!("{}", err)))?;
             files.into_iter().for_each(|manifest| {
@@ -220,7 +213,8 @@ mod tests {
         let object_store: Arc<dyn ObjectStore> = Arc::new(
             LocalFileSystem::new_with_prefix("/home/jan/workspace/rust/iceberg-rs").unwrap(),
         );
-        let table: Arc<dyn TableProvider> = Arc::new(DataFusionTable::from(
+
+        let table = Arc::new(DataFusionTable::from(
             Table::load_file_system_table("tests/data/nyc/taxis", &object_store)
                 .await
                 .unwrap(),

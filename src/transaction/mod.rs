@@ -45,7 +45,7 @@ impl<'table> Transaction<'table> {
     /// Commit the transaction to perform the [Operation]s with ACID guarantees.
     pub async fn commit(self) -> Result<()> {
         self.table.increment_sequence_number();
-        self.table.new_snapshot();
+        self.table.new_snapshot().await?;
         let table = futures::stream::iter(self.operations)
             .fold(
                 Ok::<&mut Table, anyhow::Error>(self.table),

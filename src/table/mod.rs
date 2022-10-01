@@ -12,8 +12,8 @@ use object_store::{path::Path, ObjectStore};
 use crate::{
     catalog::{table_identifier::TableIdentifier, Catalog},
     model::{
-        manifest_list::ManifestFile,
-        metadata::Metadata,
+        manifest_list::{ManifestFile, ManifestFileV1, ManifestFileV2},
+        metadata::{FormatVersion, Metadata},
         schema::SchemaStruct,
         snapshot::{SnapshotV1, SnapshotV2, Summary},
     },
@@ -48,10 +48,7 @@ impl Table {
         metadata: Metadata,
         metadata_location: &str,
     ) -> Result<Self> {
-        let manifests = get_manifests(&metadata, catalog.object_store())
-            .await
-            .and_then(|x| x.collect::<Result<Vec<_>>>())
-            .unwrap_or_default();
+        let manifests = get_manifests(&metadata, catalog.object_store()).await?;
         Ok(Table {
             table_type: TableType::Metastore(identifier, catalog),
             metadata,
@@ -110,10 +107,7 @@ impl Table {
             std::str::from_utf8(bytes).map_err(|err| anyhow!(err.to_string()))?,
         )
         .map_err(|err| anyhow!(err.to_string()))?;
-        let manifests = get_manifests(&metadata, Arc::clone(object_store))
-            .await
-            .and_then(|x| x.collect::<Result<Vec<_>>>())
-            .unwrap_or_default();
+        let manifests = get_manifests(&metadata, Arc::clone(object_store)).await?;
         Ok(Table {
             metadata,
             table_type: TableType::FileSystem(Arc::clone(object_store)),
@@ -175,12 +169,37 @@ impl Table {
         }
     }
 
-    pub(crate) fn new_snapshot(&mut self) {
+    pub(crate) async fn new_snapshot(&mut self) -> Result<()> {
         let mut bytes: [u8; 8] = [0u8; 8];
         getrandom::getrandom(&mut bytes).unwrap();
         let snapshot_id = i64::from_le_bytes(bytes);
+        let object_store = self.object_store();
+        let old_manifest_list_location = self.metadata.manifest_list().map(|st| st.to_string());
         match &mut self.metadata {
             Metadata::V1(metadata) => {
+                let new_manifest_list_location = metadata.location.to_string()
+                    + "/metadata/snap-"
+                    + &snapshot_id.to_string()
+                    + &uuid::Uuid::new_v4().to_string()
+                    + ".avro";
+                match old_manifest_list_location {
+                    Some(old_manifest_list_location) => {
+                        object_store
+                            .copy(
+                                &old_manifest_list_location.into(),
+                                &new_manifest_list_location.clone().into(),
+                            )
+                            .await?
+                    }
+                    None => {
+                        object_store
+                            .put(
+                                &new_manifest_list_location.clone().into(),
+                                Vec::new().into(),
+                            )
+                            .await?;
+                    }
+                };
                 let snapshot = SnapshotV1 {
                     snapshot_id,
                     parent_snapshot_id: metadata.current_snapshot_id,
@@ -188,13 +207,7 @@ impl Table {
                         .duration_since(SystemTime::UNIX_EPOCH)
                         .unwrap()
                         .as_millis() as i64,
-                    manifest_list: Some(
-                        metadata.location.to_string()
-                            + "/metadata/snap-"
-                            + &snapshot_id.to_string()
-                            + &uuid::Uuid::new_v4().to_string()
-                            + ".avro",
-                    ),
+                    manifest_list: Some(new_manifest_list_location),
                     manifests: None,
                     summary: None,
                     schema_id: metadata.current_schema_id.map(|id| id as i64),
@@ -205,9 +218,33 @@ impl Table {
                 } else {
                     metadata.snapshots = Some(vec![snapshot]);
                     metadata.current_snapshot_id = Some(snapshot_id)
-                }
+                };
+                Ok(())
             }
             Metadata::V2(metadata) => {
+                let new_manifest_list_location = metadata.location.to_string()
+                    + "/metadata/snap-"
+                    + &snapshot_id.to_string()
+                    + &uuid::Uuid::new_v4().to_string()
+                    + ".avro";
+                match old_manifest_list_location {
+                    Some(old_manifest_list_location) => {
+                        object_store
+                            .copy(
+                                &old_manifest_list_location.into(),
+                                &new_manifest_list_location.clone().into(),
+                            )
+                            .await?
+                    }
+                    None => {
+                        object_store
+                            .put(
+                                &new_manifest_list_location.clone().into(),
+                                Vec::new().into(),
+                            )
+                            .await?;
+                    }
+                };
                 let snapshot = SnapshotV2 {
                     snapshot_id,
                     parent_snapshot_id: metadata.current_snapshot_id,
@@ -216,11 +253,7 @@ impl Table {
                         .duration_since(SystemTime::UNIX_EPOCH)
                         .unwrap()
                         .as_millis() as i64,
-                    manifest_list: metadata.location.to_string()
-                        + "/metadata/snap-"
-                        + &snapshot_id.to_string()
-                        + &uuid::Uuid::new_v4().to_string()
-                        + ".avro",
+                    manifest_list: new_manifest_list_location,
                     summary: Summary {
                         operation: None,
                         other: HashMap::new(),
@@ -233,7 +266,8 @@ impl Table {
                 } else {
                     metadata.snapshots = Some(vec![snapshot]);
                     metadata.current_snapshot_id = Some(snapshot_id)
-                }
+                };
+                Ok(())
             }
         }
     }
@@ -242,35 +276,42 @@ impl Table {
 pub(crate) async fn get_manifests(
     metadata: &Metadata,
     object_store: Arc<dyn ObjectStore>,
-) -> Result<impl Iterator<Item = Result<ManifestFile>>> {
-    let path: Path = metadata
-        .manifest_list()
-        .ok_or_else(|| anyhow!("No snapshots in this table."))?
-        .into();
-    {
-        let bytes: Cursor<Vec<u8>> = Cursor::new(
-            object_store
-                .get(&path)
-                .await
-                .map_err(anyhow::Error::msg)?
-                .bytes()
-                .await?
-                .into(),
-        );
-        let reader = apache_avro::Reader::new(bytes)?;
-        let map = reader.map(
-            avro_value_to_manifest_file
-                as fn(Result<AvroValue, apache_avro::Error>) -> Result<ManifestFile, anyhow::Error>,
-        );
-        Ok(map)
+) -> Result<Vec<ManifestFile>> {
+    match metadata.manifest_list() {
+        Some(manifest_list) => {
+            let bytes: Cursor<Vec<u8>> = Cursor::new(
+                object_store
+                    .get(&manifest_list.into())
+                    .await
+                    .map_err(anyhow::Error::msg)?
+                    .bytes()
+                    .await?
+                    .into(),
+            );
+            if bytes.get_ref().len() > 0 {
+                let reader = apache_avro::Reader::new(bytes)?;
+                reader
+                    .map(|record| avro_value_to_manifest_file(record, metadata.format_version()))
+                    .collect()
+            } else {
+                Ok(Vec::new())
+            }
+        }
+        None => Ok(Vec::new()),
     }
 }
 
 fn avro_value_to_manifest_file(
     entry: Result<AvroValue, apache_avro::Error>,
+    format_version: FormatVersion,
 ) -> Result<ManifestFile, anyhow::Error> {
     entry
-        .and_then(|value| apache_avro::from_value(&value))
+        .and_then(|value| match format_version {
+            FormatVersion::V1 => apache_avro::from_value::<ManifestFileV1>(&value)
+                .map(|entry| ManifestFile::V1(entry)),
+            FormatVersion::V2 => apache_avro::from_value::<ManifestFileV2>(&value)
+                .map(|entry| ManifestFile::V2(entry)),
+        })
         .map_err(anyhow::Error::msg)
 }
 

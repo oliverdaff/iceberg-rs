@@ -12,7 +12,7 @@ use std::{
 
 use anyhow::Result;
 use apache_avro::{types::Value as AvroValue, Reader};
-use futures::{Future, Stream, TryFutureExt};
+use futures::{stream, Future, Stream, StreamExt, TryFutureExt, TryStreamExt};
 use object_store::{path::Path, ObjectStore};
 
 use crate::model::{manifest::ManifestEntry, manifest_list::ManifestFile};
@@ -23,35 +23,44 @@ impl Table {
     /// Get a stream of files associated to a table. The files are returned based on the list of manifest files associated to the table.
     /// The included manifest files can be filtered based on an filter vector. The filter vector has the length equal to the number of manifest files
     /// and contains a true entry everywhere the manifest file is to be included in the output.
-    pub async fn files<'file>(
-        &self,
-        filter: Option<Vec<bool>>,
-    ) -> Result<impl Stream<Item = Result<ManifestEntry>> + '_> {
-        let manifests = match filter {
+    pub async fn files(&self, filter: Option<Vec<bool>>) -> Result<Vec<ManifestEntry>> {
+        let iter = match filter {
             Some(predicate) => {
                 self.manifests()
                     .iter()
                     .zip(Box::new(predicate.into_iter())
                         as Box<dyn Iterator<Item = bool> + Send + Sync>)
                     .filter_map(
-                        filter_manifest
-                            as fn((&'file ManifestFile, bool)) -> Option<&'file ManifestFile>,
+                        filter_manifest as fn((&ManifestFile, bool)) -> Option<&ManifestFile>,
                     )
             }
             None => self
                 .manifests()
                 .iter()
                 .zip(Box::new(repeat(true)) as Box<dyn Iterator<Item = bool> + Send + Sync>)
-                .filter_map(
-                    filter_manifest
-                        as fn((&'file ManifestFile, bool)) -> Option<&'file ManifestFile>,
-                ),
+                .filter_map(filter_manifest as fn((&ManifestFile, bool)) -> Option<&ManifestFile>),
         };
-        Ok(DataFileStream {
-            object_store: self.object_store(),
-            manifest_list_iter: manifests,
-            manifest_iter: None,
-        })
+        stream::iter(iter)
+            .map(|file| async move {
+                let object_store = Arc::clone(&self.object_store());
+                let path: Path = file.manifest_path().into();
+                let bytes = Cursor::new(Vec::from(
+                    object_store
+                        .get(&path)
+                        .and_then(|file| file.bytes())
+                        .await?,
+                ));
+                let reader = apache_avro::Reader::new(bytes)?;
+                Ok(stream::iter(reader.map(
+                    avro_value_to_manifest_entry
+                        as fn(
+                            Result<AvroValue, apache_avro::Error>,
+                        ) -> Result<ManifestEntry, anyhow::Error>,
+                )))
+            })
+            .flat_map(|reader| reader.try_flatten_stream())
+            .try_collect()
+            .await
     }
 }
 
@@ -134,10 +143,8 @@ impl<'list, 'manifest> Stream for DataFileStream<'list, 'manifest> {
 #[cfg(test)]
 mod tests {
 
-    use std::sync::Arc;
-
-    use futures::StreamExt;
     use object_store::{memory::InMemory, ObjectStore};
+    use std::sync::Arc;
 
     use crate::{
         model::schema::{AllType, PrimitiveType, SchemaStruct, SchemaV2, StructField},
@@ -199,21 +206,22 @@ mod tests {
             .files(None)
             .await
             .unwrap()
-            .map(|manifest_entry| manifest_entry.map(|x| x.file_path().to_string()));
+            .into_iter()
+            .map(|manifest_entry| manifest_entry.file_path().to_string());
         assert_eq!(
-            files.next().await.unwrap().unwrap(),
+            files.next().unwrap(),
             "test/append/data/file1.parquet".to_string()
         );
         assert_eq!(
-            files.next().await.unwrap().unwrap(),
+            files.next().unwrap(),
             "test/append/data/file2.parquet".to_string()
         );
         assert_eq!(
-            files.next().await.unwrap().unwrap(),
+            files.next().unwrap(),
             "test/append/data/file3.parquet".to_string()
         );
         assert_eq!(
-            files.next().await.unwrap().unwrap(),
+            files.next().unwrap(),
             "test/append/data/file4.parquet".to_string()
         );
     }

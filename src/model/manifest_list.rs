@@ -468,8 +468,8 @@ mod tests {
         let reader = apache_avro::Reader::new(&*encoded).unwrap();
 
         for record in reader {
-            let result = apache_avro::from_value::<ManifestFile>(&record.unwrap()).unwrap();
-            assert_eq!(manifest_file, result);
+            let result = apache_avro::from_value::<ManifestFileV2>(&record.unwrap()).unwrap();
+            assert_eq!(manifest_file, ManifestFile::V2(result));
         }
     }
 
@@ -508,8 +508,8 @@ mod tests {
         let reader = apache_avro::Reader::new(&*encoded).unwrap();
 
         for record in reader {
-            let result = apache_avro::from_value::<ManifestFile>(&record.unwrap()).unwrap();
-            assert_eq!(manifest_file, result);
+            let result = apache_avro::from_value::<ManifestFileV1>(&record.unwrap()).unwrap();
+            assert_eq!(manifest_file, ManifestFile::V1(result));
         }
     }
 }

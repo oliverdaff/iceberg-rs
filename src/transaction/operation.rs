@@ -58,10 +58,6 @@ impl Operation {
             Operation::NewFastAppend(paths) => {
                 let object_store = table.object_store();
                 let table_metadata = table.metadata();
-                let manifest_list_location: Path = table_metadata
-                    .manifest_list()
-                    .ok_or_else(|| anyhow!("No manifest list in table metadata."))?
-                    .into();
                 let manifest_bytes = match table_metadata {
                     Metadata::V1(metadata) => {
                         let manifest_schema =
@@ -157,7 +153,10 @@ impl Operation {
                         manifest_writer.into_inner()?
                     }
                 };
-
+                let manifest_list_location: Path = table_metadata
+                    .manifest_list()
+                    .ok_or_else(|| anyhow!("No manifest list in table metadata."))?
+                    .into();
                 let manifest_location: Path = (manifest_list_location
                     .to_string()
                     .trim_end_matches(".avro")
@@ -174,16 +173,16 @@ impl Operation {
                         )?;
                         let mut manifest_list_writer =
                             apache_avro::Writer::new(&manifest_list_schema, Vec::new());
-                        match table_metadata.old_manifest_list() {
-                            Some(old_manifest_location) => {
-                                let path = old_manifest_location.into();
-                                let bytes: Vec<u8> =
-                                    object_store.get(&path).await?.bytes().await?.into();
-                                let reader = apache_avro::Reader::new(&*bytes)?;
-                                manifest_list_writer.extend(reader.filter_map(Result::ok))?;
-                            }
-                            None => (),
-                        };
+                        let bytes: Vec<u8> = object_store
+                            .get(&manifest_list_location)
+                            .await?
+                            .bytes()
+                            .await?
+                            .into();
+                        if bytes.len() > 0 {
+                            let reader = apache_avro::Reader::new(&*bytes)?;
+                            manifest_list_writer.extend(reader.filter_map(Result::ok))?;
+                        }
                         let manifest_file = ManifestFile::V1(ManifestFileV1 {
                             manifest_path: manifest_location.to_string(),
                             manifest_length: 1200,
@@ -213,16 +212,16 @@ impl Operation {
                         )?;
                         let mut manifest_list_writer =
                             apache_avro::Writer::new(&manifest_list_schema, Vec::new());
-                        match table_metadata.old_manifest_list() {
-                            Some(old_manifest_location) => {
-                                let path = old_manifest_location.into();
-                                let bytes: Vec<u8> =
-                                    object_store.get(&path).await?.bytes().await?.into();
-                                let reader = apache_avro::Reader::new(&*bytes)?;
-                                manifest_list_writer.extend(reader.filter_map(Result::ok))?;
-                            }
-                            None => (),
-                        };
+                        let bytes: Vec<u8> = object_store
+                            .get(&manifest_list_location)
+                            .await?
+                            .bytes()
+                            .await?
+                            .into();
+                        if bytes.len() > 0 {
+                            let reader = apache_avro::Reader::new(&*bytes)?;
+                            manifest_list_writer.extend(reader.filter_map(Result::ok))?;
+                        }
                         let manifest_file = ManifestFile::V2(ManifestFileV2 {
                             manifest_path: manifest_location.to_string(),
                             manifest_length: 1200,
@@ -250,10 +249,6 @@ impl Operation {
                         manifest_list_writer.into_inner()?
                     }
                 };
-                let manifest_list_location: Path = table_metadata
-                    .manifest_list()
-                    .ok_or_else(|| anyhow!("No manifest list in table metadata."))?
-                    .into();
                 object_store
                     .put(&manifest_list_location, manifest_list_bytes.into())
                     .await?;

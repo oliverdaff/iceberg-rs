@@ -304,25 +304,6 @@ impl Metadata {
         }
     }
     /// Get the manifest_list for the current snapshot of the table
-    pub fn old_manifest_list(&self) -> Option<&str> {
-        match self {
-            Metadata::V1(metadata) => metadata.snapshots.as_ref().and_then(|snapshots| {
-                if snapshots.len() > 1 {
-                    snapshots[snapshots.len() - 2].manifest_list.as_deref()
-                } else {
-                    None
-                }
-            }),
-            Metadata::V2(metadata) => metadata.snapshots.as_ref().and_then(|snapshots| {
-                if snapshots.len() > 1 {
-                    Some(snapshots[snapshots.len() - 2].manifest_list.as_str())
-                } else {
-                    None
-                }
-            }),
-        }
-    }
-    /// Get the manifest_list for the current snapshot of the table
     pub fn location(&self) -> &str {
         match self {
             Metadata::V1(metadata) => &metadata.location,
