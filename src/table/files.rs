@@ -8,7 +8,11 @@ use apache_avro::types::Value as AvroValue;
 use futures::{stream, StreamExt, TryFutureExt, TryStreamExt};
 use object_store::path::Path;
 
-use crate::model::{manifest::ManifestEntry, manifest_list::ManifestFile};
+use crate::model::{
+    manifest::{ManifestEntry, ManifestEntryV1, ManifestEntryV2},
+    manifest_list::ManifestFile,
+    metadata::FormatVersion,
+};
 
 use super::Table;
 
@@ -44,12 +48,9 @@ impl Table {
                         .await?,
                 ));
                 let reader = apache_avro::Reader::new(bytes)?;
-                Ok(stream::iter(reader.map(
-                    avro_value_to_manifest_entry
-                        as fn(
-                            Result<AvroValue, apache_avro::Error>,
-                        ) -> Result<ManifestEntry, anyhow::Error>,
-                )))
+                Ok(stream::iter(reader.map(|record| {
+                    avro_value_to_manifest_entry(record, &self.metadata().format_version())
+                })))
             })
             .flat_map(|reader| reader.try_flatten_stream())
             .try_collect()
@@ -67,10 +68,18 @@ fn filter_manifest((manifest, predicate): (&ManifestFile, bool)) -> Option<&Mani
 
 fn avro_value_to_manifest_entry(
     entry: Result<AvroValue, apache_avro::Error>,
+    format_version: &FormatVersion,
 ) -> Result<ManifestEntry, anyhow::Error> {
-    entry
-        .and_then(|value| apache_avro::from_value(&value))
-        .map_err(anyhow::Error::msg)
+    match format_version {
+        FormatVersion::V1 => entry
+            .and_then(|value| apache_avro::from_value::<ManifestEntryV1>(&value))
+            .map(|entry| ManifestEntry::V1(entry))
+            .map_err(anyhow::Error::msg),
+        FormatVersion::V2 => entry
+            .and_then(|value| apache_avro::from_value::<ManifestEntryV2>(&value))
+            .map(|entry| ManifestEntry::V2(entry))
+            .map_err(anyhow::Error::msg),
+    }
 }
 
 #[cfg(test)]

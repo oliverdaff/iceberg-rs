@@ -1175,7 +1175,9 @@ fn read_manifest_entry<R: std::io::Read>(
         .into_iter()
         .next()
         .context("Manifest Entry Expected")??;
-    apache_avro::from_value::<ManifestEntry>(&record).map_err(anyhow::Error::msg)
+    apache_avro::from_value::<ManifestEntryV2>(&record)
+        .map(|entry| ManifestEntry::V2(entry))
+        .map_err(anyhow::Error::msg)
 }
 
 #[cfg(test)]
@@ -1218,7 +1220,7 @@ mod tests {
                     null_value_counts: None,
                     nan_value_counts: None,
                     distinct_counts: None,
-                    lower_bounds: None,
+                    lower_bounds: Some(AvroMap(HashMap::from_iter(vec![(0,ByteBuf::from(vec![0,0,0,0]))]))),
                     upper_bounds: None,
                     key_metadata: None,
                     split_offsets: None,
@@ -1300,7 +1302,7 @@ mod tests {
                 let reader = apache_avro::Reader::new( &encoded[..]).unwrap();
 
                 for value in reader {
-                    let entry = apache_avro::from_value::<ManifestEntry>(&value.unwrap()).unwrap();
+                    let entry = apache_avro::from_value::<ManifestEntryV2>(&value.unwrap()).map(|entry| ManifestEntry::V2(entry)).unwrap();
                     assert_eq!(a, entry)
                 }
 
