@@ -8,7 +8,7 @@ use object_store::ObjectMeta;
 use std::{any::Any, collections::HashMap, ops::DerefMut, sync::Arc};
 
 use datafusion::{
-    arrow::datatypes::SchemaRef,
+    arrow::datatypes::{Schema as ArrowSchema, SchemaRef},
     common::DataFusionError,
     datasource::{
         file_format::{parquet::ParquetFormat, FileFormat},
@@ -176,16 +176,25 @@ impl TableProvider for DataFusionTable {
             .await
             .map_err(|err| DataFusionError::Internal(format!("{}", err)))?;
 
-        let table_partition_cols = self
+        let table_partition_cols: Vec<String> = self
             .metadata()
             .default_spec()
             .iter()
             .map(|field| field.name.clone())
             .collect();
 
+        let file_schema = Arc::new(ArrowSchema::new(
+            schema
+                .fields()
+                .iter()
+                .filter(|f| !table_partition_cols.contains(f.name()))
+                .cloned()
+                .collect(),
+        ));
+
         let file_scan_config = FileScanConfig {
             object_store_url,
-            file_schema: schema,
+            file_schema: file_schema,
             file_groups: file_groups.into_values().collect(),
             statistics,
             projection: projection.clone(),
@@ -235,7 +244,7 @@ mod tests {
         let pretty_results = arrow::util::pretty::pretty_format_batches(&results)
             .expect("Failed to print result")
             .to_string();
-        dbg!(&pretty_results);
+        dbg!(pretty_results);
         panic!()
     }
 }
