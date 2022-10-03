@@ -11,7 +11,7 @@ use object_store::path::Path;
 use crate::model::{
     manifest::{ManifestEntry, ManifestEntryV1, ManifestEntryV2},
     manifest_list::ManifestFile,
-    metadata::FormatVersion,
+    table_metadata::FormatVersion,
 };
 
 use super::Table;

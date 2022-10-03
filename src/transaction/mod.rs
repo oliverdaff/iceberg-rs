@@ -44,8 +44,10 @@ impl<'table> Transaction<'table> {
     }
     /// Commit the transaction to perform the [Operation]s with ACID guarantees.
     pub async fn commit(self) -> Result<()> {
+        // Before executing the transactions operations, update the metadata for a new snapshot
         self.table.increment_sequence_number();
         self.table.new_snapshot().await?;
+        // Execute the table operations
         let table = futures::stream::iter(self.operations)
             .fold(
                 Ok::<&mut Table, anyhow::Error>(self.table),
@@ -56,7 +58,9 @@ impl<'table> Transaction<'table> {
                 },
             )
             .await?;
+        // Write the new state to the object store
         match (table.catalog(), table.identifier()) {
+            // In case of a metastore table, write the metadata to object srorage and use the catalog to perform the atomic swap
             (Some(catalog), Some(identifier)) => {
                 let object_store = catalog.object_store();
                 let location = &table.metadata().location();
@@ -87,6 +91,7 @@ impl<'table> Transaction<'table> {
                 *table = new_table;
                 Ok(())
             }
+            // In case of a filesystem table, write the metadata to the object storage and perform the atomic swap of the metadata file
             (_, _) => {
                 let object_store = table.object_store();
                 let location = &table.metadata().location();

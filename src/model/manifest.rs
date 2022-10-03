@@ -16,7 +16,7 @@ use serde_bytes::ByteBuf;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use super::{
-    metadata::FormatVersion, partition::PartitionField, schema::SchemaStruct, types::Value,
+    partition::PartitionField, schema::SchemaStruct, table_metadata::FormatVersion, types::Value,
 };
 
 /// Details of a manifest file

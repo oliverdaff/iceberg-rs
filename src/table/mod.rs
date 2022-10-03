@@ -13,9 +13,9 @@ use crate::{
     catalog::{table_identifier::TableIdentifier, Catalog},
     model::{
         manifest_list::{ManifestFile, ManifestFileV1, ManifestFileV2},
-        metadata::{FormatVersion, Metadata},
         schema::SchemaStruct,
         snapshot::{SnapshotV1, SnapshotV2, Summary},
+        table_metadata::{FormatVersion, TableMetadata},
     },
     transaction::Transaction,
 };
@@ -34,7 +34,7 @@ enum TableType {
 /// Iceberg table
 pub struct Table {
     table_type: TableType,
-    metadata: Metadata,
+    metadata: TableMetadata,
     metadata_location: String,
     manifests: Vec<ManifestFile>,
 }
@@ -45,7 +45,7 @@ impl Table {
     pub async fn new_metastore_table(
         identifier: TableIdentifier,
         catalog: Arc<dyn Catalog>,
-        metadata: Metadata,
+        metadata: TableMetadata,
         metadata_location: &str,
     ) -> Result<Self> {
         let manifests = get_manifests(&metadata, catalog.object_store()).await?;
@@ -103,7 +103,7 @@ impl Table {
             .bytes()
             .await
             .map_err(|err| anyhow!(err.to_string()))?;
-        let metadata: Metadata = serde_json::from_str(
+        let metadata: TableMetadata = serde_json::from_str(
             std::str::from_utf8(bytes).map_err(|err| anyhow!(err.to_string()))?,
         )
         .map_err(|err| anyhow!(err.to_string()))?;
@@ -141,7 +141,7 @@ impl Table {
         self.metadata.current_schema()
     }
     /// Get the metadata of the table
-    pub fn metadata(&self) -> &Metadata {
+    pub fn metadata(&self) -> &TableMetadata {
         &self.metadata
     }
     /// Get the location of the current metadata file
@@ -163,8 +163,8 @@ impl Table {
     /// Increment the sequence number of the table. Is typically used when commiting a new table transaction.
     pub(crate) fn increment_sequence_number(&mut self) {
         match &mut self.metadata {
-            Metadata::V1(_) => (),
-            Metadata::V2(metadata) => {
+            TableMetadata::V1(_) => (),
+            TableMetadata::V2(metadata) => {
                 metadata.last_sequence_number += 1;
             }
         }
@@ -178,7 +178,7 @@ impl Table {
         let object_store = self.object_store();
         let old_manifest_list_location = self.metadata.manifest_list().map(|st| st.to_string());
         match &mut self.metadata {
-            Metadata::V1(metadata) => {
+            TableMetadata::V1(metadata) => {
                 let new_manifest_list_location = metadata.location.to_string()
                     + "/metadata/snap-"
                     + &snapshot_id.to_string()
@@ -224,7 +224,7 @@ impl Table {
                 };
                 Ok(())
             }
-            Metadata::V2(metadata) => {
+            TableMetadata::V2(metadata) => {
                 let new_manifest_list_location = metadata.location.to_string()
                     + "/metadata/snap-"
                     + &snapshot_id.to_string()
@@ -280,7 +280,7 @@ impl Table {
 // Return all manifest files associated to the latest table snapshot. Reads the related manifest_list file and returns its entries.
 // If the manifest list file is empty returns an empty vector.
 pub(crate) async fn get_manifests(
-    metadata: &Metadata,
+    metadata: &TableMetadata,
     object_store: Arc<dyn ObjectStore>,
 ) -> Result<Vec<ManifestFile>> {
     match metadata.manifest_list() {

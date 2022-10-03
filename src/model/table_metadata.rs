@@ -19,17 +19,17 @@ use super::{partition::PartitionField, schema::SchemaStruct};
 /// Metadata of an iceberg table
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
-pub enum Metadata {
+pub enum TableMetadata {
     /// Version 2 of the table metadata
-    V2(MetadataV2),
+    V2(TableMetadataV2),
     /// Version 1 of the table metadata
-    V1(MetadataV1),
+    V1(TableMetadataV1),
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "format-version")]
 /// Fields for the version 2 of the table metadata.
-pub struct MetadataV2 {
+pub struct TableMetadataV2 {
     /// Integer Version for the format.
     /// A UUID that identifies the table
     pub table_uuid: Uuid,
@@ -95,7 +95,7 @@ pub struct MetadataV2 {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "format-version")]
 /// Fields for the version 1 of the table metadata.
-pub struct MetadataV1 {
+pub struct TableMetadataV1 {
     /// Integer Version for the format.
     /// A UUID that identifies the table
     pub table_uuid: Option<Uuid>,
@@ -156,8 +156,8 @@ pub struct MetadataV1 {
     pub default_sort_order_id: i64,
 }
 
-impl From<MetadataV1> for MetadataV2 {
-    fn from(v1: MetadataV1) -> Self {
+impl From<TableMetadataV1> for TableMetadataV2 {
+    fn from(v1: TableMetadataV1) -> Self {
         let last_partition_id = v1.last_partition_id.unwrap_or_else(|| {
             (&v1.partition_spec)
                 .iter()
@@ -168,7 +168,7 @@ impl From<MetadataV1> for MetadataV2 {
             .current_schema_id
             .unwrap_or_else(|| v1.schema.schema_id.unwrap_or(0));
         let default_spec_id = v1.default_spec_id.unwrap_or(0);
-        MetadataV2 {
+        TableMetadataV2 {
             table_uuid: v1.table_uuid.unwrap_or_else(Uuid::new_v4),
             location: v1.location,
             last_sequence_number: 0,
@@ -234,12 +234,12 @@ pub enum FormatVersion {
     V2,
 }
 
-impl Metadata {
+impl TableMetadata {
     /// Get current schema of the table
     pub fn current_schema(&self) -> &SchemaStruct {
         match self {
-            Metadata::V1(metadata) => &metadata.schema.struct_fields,
-            Metadata::V2(metadata) => {
+            TableMetadata::V1(metadata) => &metadata.schema.struct_fields,
+            TableMetadata::V2(metadata) => {
                 &metadata
                     .schemas
                     .iter()
@@ -252,8 +252,8 @@ impl Metadata {
     /// Get the default partition spec for the table
     pub fn default_spec(&self) -> &[PartitionField] {
         match self {
-            Metadata::V1(metadata) => &metadata.partition_spec,
-            Metadata::V2(metadata) => {
+            TableMetadata::V1(metadata) => &metadata.partition_spec,
+            TableMetadata::V2(metadata) => {
                 &metadata
                     .partition_specs
                     .iter()
@@ -266,12 +266,12 @@ impl Metadata {
     /// Get the partition spec with thte given spec_id for the table
     pub fn get_spec(&self, id: i32) -> Option<&[PartitionField]> {
         match self {
-            Metadata::V1(metadata) => metadata
+            TableMetadata::V1(metadata) => metadata
                 .partition_specs
                 .as_ref()
                 .and_then(|spec| spec.iter().find(|spec| spec.spec_id == id))
                 .map(|spec| spec.fields.as_slice()),
-            Metadata::V2(metadata) => metadata
+            TableMetadata::V2(metadata) => metadata
                 .partition_specs
                 .iter()
                 .find(|spec| spec.spec_id == id)
@@ -281,7 +281,7 @@ impl Metadata {
     /// Get the manifest_list for the current snapshot of the table
     pub fn manifest_list(&self) -> Option<&str> {
         match self {
-            Metadata::V1(metadata) => metadata
+            TableMetadata::V1(metadata) => metadata
                 .snapshots
                 .as_ref()
                 .zip(metadata.current_snapshot_id.as_ref())
@@ -291,7 +291,7 @@ impl Metadata {
                         .find(|snapshot| snapshot.snapshot_id == *id)
                         .and_then(|snapshot| snapshot.manifest_list.as_deref())
                 }),
-            Metadata::V2(metadata) => metadata
+            TableMetadata::V2(metadata) => metadata
                 .snapshots
                 .as_ref()
                 .zip(metadata.current_snapshot_id.as_ref())
@@ -306,33 +306,33 @@ impl Metadata {
     /// Get the base location of the table
     pub fn location(&self) -> &str {
         match self {
-            Metadata::V1(metadata) => &metadata.location,
-            Metadata::V2(metadata) => &metadata.location,
+            TableMetadata::V1(metadata) => &metadata.location,
+            TableMetadata::V2(metadata) => &metadata.location,
         }
     }
     /// Get the last_sequence_number of the table
     pub fn last_sequence_number(&self) -> i64 {
         match self {
-            Metadata::V1(metadata) => metadata
+            TableMetadata::V1(metadata) => metadata
                 .snapshots
                 .as_ref()
                 .map(|snapshots| snapshots.len() as i64)
                 .unwrap_or(1),
-            Metadata::V2(metadata) => metadata.last_sequence_number,
+            TableMetadata::V2(metadata) => metadata.last_sequence_number,
         }
     }
     /// Timestamp in milliseconds from the unix epoch when the table was last updated.
     pub fn last_updated_ms(&self) -> i64 {
         match self {
-            Metadata::V1(metadata) => metadata.last_updated_ms,
-            Metadata::V2(metadata) => metadata.last_updated_ms,
+            TableMetadata::V1(metadata) => metadata.last_updated_ms,
+            TableMetadata::V2(metadata) => metadata.last_updated_ms,
         }
     }
     /// Get the format version of the table
     pub fn format_version(&self) -> FormatVersion {
         match self {
-            Metadata::V1(_) => FormatVersion::V1,
-            Metadata::V2(_) => FormatVersion::V2,
+            TableMetadata::V1(_) => FormatVersion::V1,
+            TableMetadata::V2(_) => FormatVersion::V2,
         }
     }
 }
@@ -342,9 +342,9 @@ mod tests {
 
     use anyhow::Result;
 
-    use crate::model::metadata::Metadata;
+    use crate::model::table_metadata::TableMetadata;
 
-    use super::MetadataV2;
+    use super::TableMetadataV2;
 
     #[test]
     fn test_deserialize_table_data_v2() -> Result<()> {
@@ -399,9 +399,10 @@ mod tests {
                 "default-sort-order-id": 0
             }
         "#;
-        let metadata = serde_json::from_str::<Metadata>(&data).expect("Failed to deserialize json");
+        let metadata =
+            serde_json::from_str::<TableMetadata>(&data).expect("Failed to deserialize json");
         //test serialise deserialise works.
-        let metadata_two: Metadata = serde_json::from_str(
+        let metadata_two: TableMetadata = serde_json::from_str(
             &serde_json::to_string(&metadata).expect("Failed to serialize metadata"),
         )
         .expect("Failed to serialize json");
@@ -543,9 +544,10 @@ mod tests {
             } ]
           }
         "#;
-        let metadata = serde_json::from_str::<Metadata>(&data).expect("Failed to deserialize json");
+        let metadata =
+            serde_json::from_str::<TableMetadata>(&data).expect("Failed to deserialize json");
         //test serialise deserialise works.
-        let metadata_two: Metadata = serde_json::from_str(
+        let metadata_two: TableMetadata = serde_json::from_str(
             &serde_json::to_string(&metadata).expect("Failed to serialize metadata"),
         )
         .expect("Failed to serialize json");
@@ -563,7 +565,7 @@ mod tests {
                 "table-uuid": "xxxx"
             }
         "#;
-        assert!(serde_json::from_str::<MetadataV2>(&data).is_err());
+        assert!(serde_json::from_str::<TableMetadataV2>(&data).is_err());
         Ok(())
     }
     #[test]
@@ -573,7 +575,7 @@ mod tests {
                 "format-version" : 1
             }
         "#;
-        assert!(serde_json::from_str::<MetadataV2>(&data).is_err());
+        assert!(serde_json::from_str::<TableMetadataV2>(&data).is_err());
         Ok(())
     }
 }

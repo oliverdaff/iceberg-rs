@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
 
-use super::{manifest::Content, metadata::FormatVersion};
+use super::{manifest::Content, table_metadata::FormatVersion};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 /// DataFile found in Manifest.

@@ -12,8 +12,8 @@ use crate::{
             ManifestEntryV2, PartitionValues, Status,
         },
         manifest_list::{FieldSummary, ManifestFile, ManifestFileV1, ManifestFileV2},
-        metadata::Metadata,
         schema::SchemaV2,
+        table_metadata::TableMetadata,
     },
     table::Table,
 };
@@ -59,7 +59,7 @@ impl Operation {
                 let object_store = table.object_store();
                 let table_metadata = table.metadata();
                 let manifest_bytes = match table_metadata {
-                    Metadata::V1(metadata) => {
+                    TableMetadata::V1(metadata) => {
                         let manifest_schema =
                             apache_avro::Schema::parse_str(&ManifestEntry::schema(
                                 &PartitionValues::schema(
@@ -104,7 +104,7 @@ impl Operation {
                         }
                         manifest_writer.into_inner()?
                     }
-                    Metadata::V2(metadata) => {
+                    TableMetadata::V2(metadata) => {
                         let manifest_schema =
                             apache_avro::Schema::parse_str(&ManifestEntry::schema(
                                 &PartitionValues::schema(
@@ -167,7 +167,7 @@ impl Operation {
                     .put(&manifest_location, manifest_bytes.into())
                     .await?;
                 let manifest_list_bytes = match table_metadata {
-                    Metadata::V1(_) => {
+                    TableMetadata::V1(_) => {
                         let manifest_list_schema = apache_avro::Schema::parse_str(
                             &ManifestFile::schema(&table_metadata.format_version()),
                         )?;
@@ -206,7 +206,7 @@ impl Operation {
 
                         manifest_list_writer.into_inner()?
                     }
-                    Metadata::V2(_) => {
+                    TableMetadata::V2(_) => {
                         let manifest_list_schema = apache_avro::Schema::parse_str(
                             &ManifestFile::schema(&table_metadata.format_version()),
                         )?;

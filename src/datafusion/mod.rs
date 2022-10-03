@@ -80,6 +80,7 @@ impl TableProvider for DataFusionTable {
     ) -> Result<Arc<dyn ExecutionPlan>, DataFusionError> {
         let schema = self.schema();
 
+        // Create a unique URI for this particular object store
         let object_store_url = ObjectStoreUrl::parse(
             "iceberg://".to_owned() + &self.metadata().location().replace('/', "-"),
         )?;
@@ -182,6 +183,7 @@ impl TableProvider for DataFusionTable {
             .await
             .map_err(|err| DataFusionError::Internal(format!("{}", err)))?;
 
+        // Get all partition columns
         let table_partition_cols: Vec<String> = self
             .metadata()
             .default_spec()
@@ -189,6 +191,7 @@ impl TableProvider for DataFusionTable {
             .map(|field| field.name.clone())
             .collect();
 
+        // Remove the partition columns from the schema. The values for the partition column are stored in the partition values
         let file_schema = Arc::new(ArrowSchema::new(
             schema
                 .fields()
@@ -198,6 +201,7 @@ impl TableProvider for DataFusionTable {
                 .collect(),
         ));
 
+        // Get the ids of the partition columns
         let partition_ids: Vec<usize> = schema
             .fields()
             .iter()
@@ -211,6 +215,7 @@ impl TableProvider for DataFusionTable {
             })
             .collect();
 
+        // Change the projection according to the previous schema change
         let projection = projection.clone().map(|projection| {
             projection
                 .iter()
@@ -300,7 +305,7 @@ mod tests {
         ctx.register_table("nyc_taxis", table).unwrap();
 
         let df = ctx
-            .sql("SELECT vendor_id, trip_distance FROM nyc_taxis WHERE vendor_id = 1")
+            .sql("SELECT vendor_id, trip_distance FROM nyc_taxis WHERE CAST(vendor_id AS INT) = 1")
             .await
             .unwrap();
 
