@@ -31,7 +31,7 @@ enum TableType {
     Metastore(TableIdentifier, Arc<dyn Catalog>),
 }
 
-///Iceberg table
+/// Iceberg table
 pub struct Table {
     table_type: TableType,
     metadata: Metadata,
@@ -160,6 +160,7 @@ impl Table {
 
 /// Private interface of the table.
 impl Table {
+    /// Increment the sequence number of the table. Is typically used when commiting a new table transaction.
     pub(crate) fn increment_sequence_number(&mut self) {
         match &mut self.metadata {
             Metadata::V1(_) => (),
@@ -169,6 +170,7 @@ impl Table {
         }
     }
 
+    /// Create a new table snapshot based on the manifest_list file of the previous snapshot.
     pub(crate) async fn new_snapshot(&mut self) -> Result<()> {
         let mut bytes: [u8; 8] = [0u8; 8];
         getrandom::getrandom(&mut bytes).unwrap();
@@ -182,6 +184,7 @@ impl Table {
                     + &snapshot_id.to_string()
                     + &uuid::Uuid::new_v4().to_string()
                     + ".avro";
+                // If there is a previous snapshot with a manifest_list file, that file gets copied for the new snapshot. If not, a new empty file is created.
                 match old_manifest_list_location {
                     Some(old_manifest_list_location) => {
                         object_store
@@ -227,6 +230,7 @@ impl Table {
                     + &snapshot_id.to_string()
                     + &uuid::Uuid::new_v4().to_string()
                     + ".avro";
+                // If there is a previous snapshot with a manifest_list file, that file gets copied for the new snapshot. If not, a new empty file is created.
                 match old_manifest_list_location {
                     Some(old_manifest_list_location) => {
                         object_store
@@ -273,6 +277,8 @@ impl Table {
     }
 }
 
+// Return all manifest files associated to the latest table snapshot. Reads the related manifest_list file and returns its entries.
+// If the manifest list file is empty returns an empty vector.
 pub(crate) async fn get_manifests(
     metadata: &Metadata,
     object_store: Arc<dyn ObjectStore>,
@@ -288,7 +294,8 @@ pub(crate) async fn get_manifests(
                     .await?
                     .into(),
             );
-            if bytes.get_ref().len() > 0 {
+            // Read the file content only if the bytes are not empty otherwise return an empty vector
+            if !bytes.get_ref().is_empty() {
                 let reader = apache_avro::Reader::new(bytes)?;
                 reader
                     .map(|record| avro_value_to_manifest_file(record, metadata.format_version()))
@@ -301,6 +308,7 @@ pub(crate) async fn get_manifests(
     }
 }
 
+/// Convert an avro value to a [ManifestFile] according to the provided format version
 fn avro_value_to_manifest_file(
     entry: Result<AvroValue, apache_avro::Error>,
     format_version: FormatVersion,

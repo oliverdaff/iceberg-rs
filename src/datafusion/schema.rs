@@ -1,16 +1,16 @@
 /*!
- * Convert between datafusion and iceberh schema
+ * Convert between datafusion and iceberg schema
 */
 
 use anyhow::{anyhow, Result};
 
 use std::collections::HashMap;
 
-use datafusion::arrow::datatypes::{DataType, Field, Schema, TimeUnit};
+use datafusion::arrow::datatypes::{DataType, Field, Schema as ArrowSchema, TimeUnit};
 
 use crate::model::schema::{AllType, PrimitiveType, SchemaStruct};
 
-pub fn iceberg_to_arrow_schema(schema: &SchemaStruct) -> Result<Schema> {
+pub fn iceberg_to_arrow_schema(schema: &SchemaStruct) -> Result<ArrowSchema> {
     let fields = schema
         .fields
         .iter()
@@ -25,7 +25,7 @@ pub fn iceberg_to_arrow_schema(schema: &SchemaStruct) -> Result<Schema> {
         })
         .collect::<Result<_, anyhow::Error>>()?;
     let metadata = HashMap::new();
-    Ok(Schema { fields, metadata })
+    Ok(ArrowSchema { fields, metadata })
 }
 
 impl TryFrom<&AllType> for DataType {

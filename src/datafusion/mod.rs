@@ -90,7 +90,10 @@ impl TableProvider for DataFusionTable {
             self.0.object_store(),
         );
 
+        // All files have to be grouped according to their partition values. This is done by using a HashMap with the partition values as the key.
+        // This way data files with the same partition value are mapped to the same vector.
         let mut file_groups: HashMap<Vec<ScalarValue>, Vec<PartitionedFile>> = HashMap::new();
+        // If there is a filter expression the manifests to read are pruned based on the pruning statistics available in the manifest_list file.
         if let Some(Some(predicate)) = (!filters.is_empty()).then_some(combine_filters(filters)) {
             let pruning_predicate = PruningPredicate::try_new(predicate, schema.clone())?;
             let manifests_to_prune = pruning_predicate.prune(&PruneManifests::from(self))?;
@@ -98,6 +101,7 @@ impl TableProvider for DataFusionTable {
                 .files(Some(manifests_to_prune))
                 .await
                 .map_err(|err| DataFusionError::Internal(format!("{}", err)))?;
+            // After the first pruning stage the data_files are pruned again based on the pruning statistics in the manifest files.
             let files_to_prune = pruning_predicate.prune(&PruneDataFiles::new(self, &files))?;
             files
                 .into_iter()
@@ -108,7 +112,9 @@ impl TableProvider for DataFusionTable {
                             .partition_values()
                             .iter()
                             .map(|value| match value {
-                                Some(v) => v.into(),
+                                Some(v) => {
+                                    ScalarValue::Utf8(Some(serde_json::to_string(v).unwrap()))
+                                }
                                 None => ScalarValue::Null,
                             })
                             .collect::<Vec<ScalarValue>>();
@@ -144,7 +150,7 @@ impl TableProvider for DataFusionTable {
                     .partition_values()
                     .iter()
                     .map(|value| match value {
-                        Some(v) => v.into(),
+                        Some(v) => ScalarValue::Utf8(Some(serde_json::to_string(v).unwrap())),
                         None => ScalarValue::Null,
                     })
                     .collect::<Vec<ScalarValue>>();
@@ -192,12 +198,41 @@ impl TableProvider for DataFusionTable {
                 .collect(),
         ));
 
+        let partition_ids: Vec<usize> = schema
+            .fields()
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, field)| {
+                if table_partition_cols.contains(field.name()) {
+                    Some(idx)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let projection = projection.clone().map(|projection| {
+            projection
+                .iter()
+                .map(|idx| {
+                    if partition_ids.contains(&idx) {
+                        file_schema.fields.len()
+                            + partition_ids.iter().position(|x| x == idx).unwrap()
+                    } else {
+                        partition_ids
+                            .iter()
+                            .fold(*idx, |acc, x| if idx > x { acc - 1 } else { acc })
+                    }
+                })
+                .collect()
+        });
+
         let file_scan_config = FileScanConfig {
             object_store_url,
             file_schema: file_schema,
             file_groups: file_groups.into_values().collect(),
             statistics,
-            projection: projection.clone(),
+            projection: projection,
             limit: limit.clone(),
             table_partition_cols,
         };
@@ -209,6 +244,7 @@ impl TableProvider for DataFusionTable {
 
 #[cfg(test)]
 mod tests {
+
     use datafusion::{
         arrow::{self, record_batch::RecordBatch},
         prelude::SessionContext,
@@ -234,6 +270,37 @@ mod tests {
 
         let df = ctx
             .sql("SELECT vendor_id, MIN(trip_distance) FROM nyc_taxis GROUP BY vendor_id LIMIT 100")
+            .await
+            .unwrap();
+
+        // execute the plan
+        let results: Vec<RecordBatch> = df.collect().await.expect("Failed to execute query plan.");
+
+        // format the results
+        let pretty_results = arrow::util::pretty::pretty_format_batches(&results)
+            .expect("Failed to print result")
+            .to_string();
+        dbg!(pretty_results);
+        panic!()
+    }
+
+    #[tokio::test]
+    pub async fn test_datafusion_pruning() {
+        let object_store: Arc<dyn ObjectStore> =
+            Arc::new(LocalFileSystem::new_with_prefix("./tests").unwrap());
+
+        let table = Arc::new(DataFusionTable::from(
+            Table::load_file_system_table("/home/iceberg/warehouse/nyc/taxis", &object_store)
+                .await
+                .unwrap(),
+        ));
+
+        let ctx = SessionContext::new();
+
+        ctx.register_table("nyc_taxis", table).unwrap();
+
+        let df = ctx
+            .sql("SELECT vendor_id, trip_distance FROM nyc_taxis WHERE vendor_id = 1")
             .await
             .unwrap();
 

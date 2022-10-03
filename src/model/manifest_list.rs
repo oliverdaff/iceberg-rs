@@ -121,7 +121,7 @@ impl From<ManifestFileV1> for ManifestFileV2 {
 }
 
 impl ManifestFile {
-    /// Get schema of manifest list
+    /// Get schema of the manifest list
     pub fn schema(format_version: &FormatVersion) -> String {
         match format_version {
             FormatVersion::V1 => r#"

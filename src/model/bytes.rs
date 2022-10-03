@@ -8,7 +8,7 @@ use anyhow::{anyhow, Result};
 
 use super::schema::{AllType, PrimitiveType};
 
-/// Read bytes to concrete type and return it as any
+/// Convert bytes to concrete type and return it as any
 pub fn bytes_to_any(bytes: &[u8], data_type: &AllType) -> Result<Box<dyn Any>> {
     match data_type {
         AllType::Primitive(primitive) => match primitive {

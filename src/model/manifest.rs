@@ -69,7 +69,7 @@ pub enum ManifestEntry {
     V1(ManifestEntryV1),
 }
 
-/// Entry in manifest.
+/// Entry in manifest with the iceberg spec version 2.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct ManifestEntryV2 {
     /// Used to track additions and deletions
@@ -83,7 +83,7 @@ pub struct ManifestEntryV2 {
     pub data_file: DataFileV2,
 }
 
-/// Entry in manifest.
+/// Entry in manifest with the iceberg spec version 1.
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct ManifestEntryV1 {
     /// Used to track additions and deletions
@@ -405,7 +405,7 @@ struct KeyValue<T: Serialize + Clone> {
     value: T,
 }
 
-/// Utility struct to convert . Derefences to a Hashmap.
+/// Utility struct to convert avro maps to rust hashmaps. Derefences to a Hashmap.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct AvroMap<T: Serialize + Clone>(HashMap<i32, T>);
 

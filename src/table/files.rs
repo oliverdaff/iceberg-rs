@@ -17,10 +17,11 @@ use crate::model::{
 use super::Table;
 
 impl Table {
-    /// Get a stream of files associated to a table. The files are returned based on the list of manifest files associated to the table.
+    /// Get the data_files associated to a table. The files are returned based on the list of manifest files associated to that table.
     /// The included manifest files can be filtered based on an filter vector. The filter vector has the length equal to the number of manifest files
     /// and contains a true entry everywhere the manifest file is to be included in the output.
     pub async fn files(&self, filter: Option<Vec<bool>>) -> Result<Vec<ManifestEntry>> {
+        // filter manifest files according to filter vector
         let iter = match filter {
             Some(predicate) => {
                 self.manifests()
@@ -37,6 +38,7 @@ impl Table {
                 .zip(Box::new(repeat(true)) as Box<dyn Iterator<Item = bool> + Send + Sync>)
                 .filter_map(filter_manifest as fn((&ManifestFile, bool)) -> Option<&ManifestFile>),
         };
+        // Collect a vector of data files by creating a stream over the manifst files, fetch their content and return a flatten stream over their entries.
         stream::iter(iter)
             .map(|file| async move {
                 let object_store = Arc::clone(&self.object_store());
@@ -58,6 +60,7 @@ impl Table {
     }
 }
 
+// Filter manifest files according to predicate. Returns Some(&ManifestFile) of the predicate is true and None if it is false.
 fn filter_manifest((manifest, predicate): (&ManifestFile, bool)) -> Option<&ManifestFile> {
     if predicate {
         Some(manifest)
@@ -66,6 +69,7 @@ fn filter_manifest((manifest, predicate): (&ManifestFile, bool)) -> Option<&Mani
     }
 }
 
+// Convert avro value to ManifestEntry based on the format version of the table.
 fn avro_value_to_manifest_entry(
     entry: Result<AvroValue, apache_avro::Error>,
     format_version: &FormatVersion,

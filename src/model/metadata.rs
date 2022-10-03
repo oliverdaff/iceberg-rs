@@ -228,9 +228,9 @@ pub struct SnapshotLog {
 
 /// Iceberg format version
 pub enum FormatVersion {
-    /// Existing files
+    /// Iceberg spec version 1
     V1,
-    /// Added files
+    /// Iceberg spec version 2
     V2,
 }
 
@@ -303,7 +303,7 @@ impl Metadata {
                 }),
         }
     }
-    /// Get the manifest_list for the current snapshot of the table
+    /// Get the base location of the table
     pub fn location(&self) -> &str {
         match self {
             Metadata::V1(metadata) => &metadata.location,
@@ -321,14 +321,14 @@ impl Metadata {
             Metadata::V2(metadata) => metadata.last_sequence_number,
         }
     }
-    /// Get the manifest_list for the current snapshot of the table
+    /// Timestamp in milliseconds from the unix epoch when the table was last updated.
     pub fn last_updated_ms(&self) -> i64 {
         match self {
             Metadata::V1(metadata) => metadata.last_updated_ms,
             Metadata::V2(metadata) => metadata.last_updated_ms,
         }
     }
-    /// Get the manifest_list for the current snapshot of the table
+    /// Get the format version of the table
     pub fn format_version(&self) -> FormatVersion {
         match self {
             Metadata::V1(_) => FormatVersion::V1,
