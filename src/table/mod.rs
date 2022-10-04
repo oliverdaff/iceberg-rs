@@ -2,17 +2,20 @@
 Defining the [Table] struct that represents an iceberg table.
 */
 
-use std::{collections::HashMap, sync::Arc, time::SystemTime};
+use std::{collections::HashMap, io::Cursor, sync::Arc, time::SystemTime};
 
 use anyhow::{anyhow, Result};
+use apache_avro::types::Value as AvroValue;
 use futures::StreamExt;
 use object_store::{path::Path, ObjectStore};
 
 use crate::{
     catalog::{table_identifier::TableIdentifier, Catalog},
     model::{
-        snapshot::{SnapshotV2, Summary},
-        table::TableMetadataV2,
+        manifest_list::{ManifestFile, ManifestFileV1, ManifestFileV2},
+        schema::SchemaStruct,
+        snapshot::{SnapshotV1, SnapshotV2, Summary},
+        table_metadata::{FormatVersion, TableMetadata},
     },
     transaction::Transaction,
 };
@@ -28,27 +31,30 @@ enum TableType {
     Metastore(TableIdentifier, Arc<dyn Catalog>),
 }
 
-///Iceberg table
+/// Iceberg table
 pub struct Table {
     table_type: TableType,
-    metadata: TableMetadataV2,
+    metadata: TableMetadata,
     metadata_location: String,
+    manifests: Vec<ManifestFile>,
 }
 
 /// Public interface of the table.
 impl Table {
     /// Create a new metastore Table
-    pub fn new_metastore_table(
+    pub async fn new_metastore_table(
         identifier: TableIdentifier,
         catalog: Arc<dyn Catalog>,
-        metadata: TableMetadataV2,
+        metadata: TableMetadata,
         metadata_location: &str,
-    ) -> Self {
-        Table {
+    ) -> Result<Self> {
+        let manifests = get_manifests(&metadata, catalog.object_store()).await?;
+        Ok(Table {
             table_type: TableType::Metastore(identifier, catalog),
             metadata,
             metadata_location: metadata_location.to_string(),
-        }
+            manifests,
+        })
     }
     /// Load a filesystem table from an objectstore
     pub async fn load_file_system_table(
@@ -97,14 +103,16 @@ impl Table {
             .bytes()
             .await
             .map_err(|err| anyhow!(err.to_string()))?;
-        let metadata: TableMetadataV2 = serde_json::from_str(
+        let metadata: TableMetadata = serde_json::from_str(
             std::str::from_utf8(bytes).map_err(|err| anyhow!(err.to_string()))?,
         )
         .map_err(|err| anyhow!(err.to_string()))?;
+        let manifests = get_manifests(&metadata, Arc::clone(object_store)).await?;
         Ok(Table {
             metadata,
             table_type: TableType::FileSystem(Arc::clone(object_store)),
             metadata_location,
+            manifests,
         })
     }
     /// Get the table identifier in the catalog. Returns None of it is a filesystem table.
@@ -129,12 +137,20 @@ impl Table {
         }
     }
     /// Get the metadata of the table
-    pub fn metadata(&self) -> &TableMetadataV2 {
+    pub fn schema(&self) -> &SchemaStruct {
+        self.metadata.current_schema()
+    }
+    /// Get the metadata of the table
+    pub fn metadata(&self) -> &TableMetadata {
         &self.metadata
     }
     /// Get the location of the current metadata file
     pub fn metadata_location(&self) -> &str {
         &self.metadata_location
+    }
+    /// Get the location of the current metadata file
+    pub fn manifests(&self) -> &[ManifestFile] {
+        &self.manifests
     }
     /// Create a new transaction for this table
     pub fn new_transaction(&mut self) -> Transaction {
@@ -144,41 +160,169 @@ impl Table {
 
 /// Private interface of the table.
 impl Table {
+    /// Increment the sequence number of the table. Is typically used when commiting a new table transaction.
     pub(crate) fn increment_sequence_number(&mut self) {
-        self.metadata.last_sequence_number += 1;
+        match &mut self.metadata {
+            TableMetadata::V1(_) => (),
+            TableMetadata::V2(metadata) => {
+                metadata.last_sequence_number += 1;
+            }
+        }
     }
 
-    pub(crate) fn new_snapshot(&mut self) {
+    /// Create a new table snapshot based on the manifest_list file of the previous snapshot.
+    pub(crate) async fn new_snapshot(&mut self) -> Result<()> {
         let mut bytes: [u8; 8] = [0u8; 8];
         getrandom::getrandom(&mut bytes).unwrap();
         let snapshot_id = i64::from_le_bytes(bytes);
-        let snapshot = SnapshotV2 {
-            snapshot_id: snapshot_id,
-            parent_snapshot_id: self.metadata().current_snapshot_id,
-            sequence_number: self.metadata().last_sequence_number + 1,
-            timestamp_ms: SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .unwrap()
-                .as_millis() as i64,
-            manifest_list: self.metadata().location.to_string()
-                + "/metadata/snap-"
-                + &snapshot_id.to_string()
-                + &uuid::Uuid::new_v4().to_string()
-                + ".avro",
-            summary: Summary {
-                operation: None,
-                other: HashMap::new(),
-            },
-            schema_id: Some(self.metadata().current_schema_id as i64),
-        };
-        if let Some(snapshots) = &mut self.metadata.snapshots {
-            snapshots.push(snapshot);
-            self.metadata.current_snapshot_id = Some(snapshots.len() as i64)
-        } else {
-            self.metadata.snapshots = Some(vec![snapshot]);
-            self.metadata.current_snapshot_id = Some(0i64)
+        let object_store = self.object_store();
+        let old_manifest_list_location = self.metadata.manifest_list().map(|st| st.to_string());
+        match &mut self.metadata {
+            TableMetadata::V1(metadata) => {
+                let new_manifest_list_location = metadata.location.to_string()
+                    + "/metadata/snap-"
+                    + &snapshot_id.to_string()
+                    + &uuid::Uuid::new_v4().to_string()
+                    + ".avro";
+                // If there is a previous snapshot with a manifest_list file, that file gets copied for the new snapshot. If not, a new empty file is created.
+                match old_manifest_list_location {
+                    Some(old_manifest_list_location) => {
+                        object_store
+                            .copy(
+                                &old_manifest_list_location.into(),
+                                &new_manifest_list_location.clone().into(),
+                            )
+                            .await?
+                    }
+                    None => {
+                        object_store
+                            .put(
+                                &new_manifest_list_location.clone().into(),
+                                Vec::new().into(),
+                            )
+                            .await?;
+                    }
+                };
+                let snapshot = SnapshotV1 {
+                    snapshot_id,
+                    parent_snapshot_id: metadata.current_snapshot_id,
+                    timestamp_ms: SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as i64,
+                    manifest_list: Some(new_manifest_list_location),
+                    manifests: None,
+                    summary: None,
+                    schema_id: metadata.current_schema_id.map(|id| id as i64),
+                };
+                if let Some(snapshots) = &mut metadata.snapshots {
+                    snapshots.push(snapshot);
+                    metadata.current_snapshot_id = Some(snapshot_id)
+                } else {
+                    metadata.snapshots = Some(vec![snapshot]);
+                    metadata.current_snapshot_id = Some(snapshot_id)
+                };
+                Ok(())
+            }
+            TableMetadata::V2(metadata) => {
+                let new_manifest_list_location = metadata.location.to_string()
+                    + "/metadata/snap-"
+                    + &snapshot_id.to_string()
+                    + &uuid::Uuid::new_v4().to_string()
+                    + ".avro";
+                // If there is a previous snapshot with a manifest_list file, that file gets copied for the new snapshot. If not, a new empty file is created.
+                match old_manifest_list_location {
+                    Some(old_manifest_list_location) => {
+                        object_store
+                            .copy(
+                                &old_manifest_list_location.into(),
+                                &new_manifest_list_location.clone().into(),
+                            )
+                            .await?
+                    }
+                    None => {
+                        object_store
+                            .put(
+                                &new_manifest_list_location.clone().into(),
+                                Vec::new().into(),
+                            )
+                            .await?;
+                    }
+                };
+                let snapshot = SnapshotV2 {
+                    snapshot_id,
+                    parent_snapshot_id: metadata.current_snapshot_id,
+                    sequence_number: metadata.last_sequence_number + 1,
+                    timestamp_ms: SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap()
+                        .as_millis() as i64,
+                    manifest_list: new_manifest_list_location,
+                    summary: Summary {
+                        operation: None,
+                        other: HashMap::new(),
+                    },
+                    schema_id: Some(metadata.current_schema_id as i64),
+                };
+                if let Some(snapshots) = &mut metadata.snapshots {
+                    snapshots.push(snapshot);
+                    metadata.current_snapshot_id = Some(snapshot_id)
+                } else {
+                    metadata.snapshots = Some(vec![snapshot]);
+                    metadata.current_snapshot_id = Some(snapshot_id)
+                };
+                Ok(())
+            }
         }
     }
+}
+
+// Return all manifest files associated to the latest table snapshot. Reads the related manifest_list file and returns its entries.
+// If the manifest list file is empty returns an empty vector.
+pub(crate) async fn get_manifests(
+    metadata: &TableMetadata,
+    object_store: Arc<dyn ObjectStore>,
+) -> Result<Vec<ManifestFile>> {
+    match metadata.manifest_list() {
+        Some(manifest_list) => {
+            let bytes: Cursor<Vec<u8>> = Cursor::new(
+                object_store
+                    .get(&manifest_list.into())
+                    .await
+                    .map_err(anyhow::Error::msg)?
+                    .bytes()
+                    .await?
+                    .into(),
+            );
+            // Read the file content only if the bytes are not empty otherwise return an empty vector
+            if !bytes.get_ref().is_empty() {
+                let reader = apache_avro::Reader::new(bytes)?;
+                reader
+                    .map(|record| avro_value_to_manifest_file(record, metadata.format_version()))
+                    .collect()
+            } else {
+                Ok(Vec::new())
+            }
+        }
+        None => Ok(Vec::new()),
+    }
+}
+
+/// Convert an avro value to a [ManifestFile] according to the provided format version
+fn avro_value_to_manifest_file(
+    entry: Result<AvroValue, apache_avro::Error>,
+    format_version: FormatVersion,
+) -> Result<ManifestFile, anyhow::Error> {
+    entry
+        .and_then(|value| match format_version {
+            FormatVersion::V1 => {
+                apache_avro::from_value::<ManifestFileV1>(&value).map(ManifestFile::V1)
+            }
+            FormatVersion::V2 => {
+                apache_avro::from_value::<ManifestFileV2>(&value).map(ManifestFile::V2)
+            }
+        })
+        .map_err(anyhow::Error::msg)
 }
 
 #[cfg(test)]
@@ -189,7 +333,7 @@ mod tests {
     use object_store::{memory::InMemory, ObjectStore};
 
     use crate::{
-        model::schema::{AllType, PrimitiveType, SchemaV2, Struct, StructField},
+        model::schema::{AllType, PrimitiveType, SchemaStruct, SchemaV2, StructField},
         table::table_builder::TableBuilder,
     };
 
@@ -200,7 +344,7 @@ mod tests {
             schema_id: 1,
             identifier_field_ids: Some(vec![1, 2]),
             name_mapping: None,
-            struct_fields: Struct {
+            struct_fields: SchemaStruct {
                 fields: vec![
                     StructField {
                         id: 1,

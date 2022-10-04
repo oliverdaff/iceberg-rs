@@ -2,6 +2,9 @@
 A table’s [schema](https://iceberg.apache.org/spec/#schemas-and-data-types) is a list of named columns, represented by [SchemaV2].
 All data types are either [primitives](PrimitiveType) or nested types, which are [Map], [List], or [Struct]. A table [SchemaV2] is also a [Struct] type.
 */
+
+use std::fmt;
+
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{
@@ -86,6 +89,30 @@ impl<'de> Deserialize<'de> for PrimitiveType {
     }
 }
 
+impl fmt::Display for PrimitiveType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            PrimitiveType::Boolean => write!(f, "boolean"),
+            PrimitiveType::Int => write!(f, "int"),
+            PrimitiveType::Long => write!(f, "long"),
+            PrimitiveType::Float => write!(f, "float"),
+            PrimitiveType::Double => write!(f, "double"),
+            PrimitiveType::Decimal {
+                precision: _,
+                scale: _,
+            } => write!(f, "decimal"),
+            PrimitiveType::Date => write!(f, "date"),
+            PrimitiveType::Time => write!(f, "time"),
+            PrimitiveType::Timestamp => write!(f, "timestamp"),
+            PrimitiveType::Timestampz => write!(f, "timestampz"),
+            PrimitiveType::String => write!(f, "string"),
+            PrimitiveType::Uuid => write!(f, "uuid"),
+            PrimitiveType::Fixed(_) => write!(f, "fixed"),
+            PrimitiveType::Binary => write!(f, "binary"),
+        }
+    }
+}
+
 /// Parsing for the Decimal PrimitiveType
 fn deserialize_decimal<'de, D>(deserializer: D) -> Result<PrimitiveType, D::Error>
 where
@@ -153,11 +180,22 @@ pub enum AllType {
     /// All the primitive types
     Primitive(PrimitiveType),
     /// A Struct type
-    Struct(Struct),
+    Struct(SchemaStruct),
     /// A List type.
     List(List),
     /// A Map type
     Map(Map),
+}
+
+impl fmt::Display for AllType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            AllType::Primitive(primitive) => write!(f, "{}", primitive),
+            AllType::Struct(_) => write!(f, "struct"),
+            AllType::List(_) => write!(f, "list"),
+            AllType::Map(_) => write!(f, "map"),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -167,9 +205,16 @@ pub enum AllType {
 /// Each field can be either optional or required, meaning that values can (or cannot) be null.
 /// Fields may be any type.
 /// Fields may have an optional comment or doc string.
-pub struct Struct {
+pub struct SchemaStruct {
     /// The fields of the struct.
     pub fields: Vec<StructField>,
+}
+
+impl SchemaStruct {
+    /// Get structfield at certain index
+    pub fn get(&self, index: usize) -> Option<&StructField> {
+        self.fields.iter().find(|field| field.id as usize == index)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -182,6 +227,7 @@ pub struct StructField {
     /// Optional or required, meaning that values can (or can not be null)
     pub required: bool,
     /// Field can have any type
+    #[serde(rename = "type")]
     pub field_type: AllType,
     /// Fields can have any optional comment or doc string.
     pub doc: Option<String>,
@@ -201,7 +247,35 @@ pub struct SchemaV2 {
 
     #[serde(flatten)]
     /// The struct fields
-    pub struct_fields: Struct,
+    pub struct_fields: SchemaStruct,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+/// Names and types of fields in a table.
+pub struct SchemaV1 {
+    /// Identifier of the schema
+    pub schema_id: Option<i32>,
+    /// Set of primitive fields that identify rows in a table.
+    pub identifier_field_ids: Option<Vec<i32>>,
+
+    /// Name Mapping
+    pub name_mapping: Option<NameMappings>,
+
+    #[serde(flatten)]
+    /// The struct fields
+    pub struct_fields: SchemaStruct,
+}
+
+impl From<SchemaV1> for SchemaV2 {
+    fn from(v1: SchemaV1) -> Self {
+        SchemaV2 {
+            schema_id: v1.schema_id.unwrap_or(0),
+            identifier_field_ids: v1.identifier_field_ids,
+            name_mapping: v1.name_mapping,
+            struct_fields: v1.struct_fields,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -270,13 +344,13 @@ mod tests {
             "fields": []
         }
         "#;
-        assert!(serde_json::from_str::<Struct>(&data).is_ok());
+        assert!(serde_json::from_str::<SchemaStruct>(&data).is_ok());
         let data = r#"
         {
             "type" : "anyother"            
         }
         "#;
-        assert!(serde_json::from_str::<Struct>(data).is_err());
+        assert!(serde_json::from_str::<SchemaStruct>(data).is_err());
     }
 
     #[test]
@@ -286,7 +360,7 @@ mod tests {
             "id" : 1,
             "name": "struct_name",
             "required": true,
-            "field_type": "decimal(1,1)"
+            "type": "decimal(1,1)"
         }
         "#;
         let result_struct = serde_json::from_str::<StructField>(data).unwrap();
@@ -303,7 +377,7 @@ mod tests {
             "id" : 1,
             "name": "struct_name",
             "required": true,
-            "field_type": "decimal(1,1000)"
+            "type": "decimal(1,1000)"
         }
         "#;
         assert!(serde_json::from_str::<StructField>(invalid_decimal_data).is_err());
@@ -316,7 +390,7 @@ mod tests {
             "id" : 1,
             "name": "struct_name",
             "required": true,
-            "field_type": "boolean"
+            "type": "boolean"
         }
         "#;
         let result_struct = serde_json::from_str::<StructField>(data).unwrap();
@@ -333,7 +407,7 @@ mod tests {
             "id" : 1,
             "name": "struct_name",
             "required": true,
-            "field_type": "fixed[1]"
+            "type": "fixed[1]"
         }
         "#;
         let result_struct = serde_json::from_str::<StructField>(data).unwrap();
@@ -347,7 +421,7 @@ mod tests {
             "id" : 1,
             "name": "struct_name",
             "required": true,
-            "field_type": "fixed[0.1]"
+            "type": "fixed[0.1]"
         }
         "#;
         assert!(serde_json::from_str::<StructField>(invalid_fixed_data).is_err());
@@ -401,7 +475,7 @@ mod tests {
                     "id" : 1,
                     "name": "struct_name",
                     "required": true,
-                    "field_type": "fixed[1]"
+                    "type": "fixed[1]"
                 }
             ],
             "name-mapping": {

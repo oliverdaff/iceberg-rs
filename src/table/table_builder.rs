@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::catalog::table_identifier::TableIdentifier;
 use crate::model::partition::{PartitionField, Transform};
 use crate::model::sort::{NullOrder, SortDirection, SortField, SortOrder};
-use crate::model::{partition::PartitionSpec, schema::SchemaV2, table::TableMetadataV2};
+use crate::model::{partition::PartitionSpec, schema::SchemaV2, table_metadata::TableMetadataV2};
 use crate::table::Table;
 use anyhow::{anyhow, Result};
 

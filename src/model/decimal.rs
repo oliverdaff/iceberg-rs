@@ -4,7 +4,7 @@
 use anyhow::{ensure, Result};
 
 /// The decimal type
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Decimal {
     value: num_bigint::BigInt,
     /// The number of digits in the number. Must be 38 or less
