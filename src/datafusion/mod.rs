@@ -324,6 +324,7 @@ mod tests {
             .as_any()
             .downcast_ref::<Float32Array>()
             .expect("Failed to get values from result.");
-        assert_eq!(values.value(0), 1.8)
+        // Value can either be 1.8 or 8.4
+        assert!(((5.1 - values.value(0)).abs() - 3.3).abs() < 0.001)
     }
 }
