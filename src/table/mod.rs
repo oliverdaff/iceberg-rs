@@ -315,10 +315,12 @@ fn avro_value_to_manifest_file(
 ) -> Result<ManifestFile, anyhow::Error> {
     entry
         .and_then(|value| match format_version {
-            FormatVersion::V1 => apache_avro::from_value::<ManifestFileV1>(&value)
-                .map(|entry| ManifestFile::V1(entry)),
-            FormatVersion::V2 => apache_avro::from_value::<ManifestFileV2>(&value)
-                .map(|entry| ManifestFile::V2(entry)),
+            FormatVersion::V1 => {
+                apache_avro::from_value::<ManifestFileV1>(&value).map(ManifestFile::V1)
+            }
+            FormatVersion::V2 => {
+                apache_avro::from_value::<ManifestFileV2>(&value).map(ManifestFile::V2)
+            }
         })
         .map_err(anyhow::Error::msg)
 }

@@ -1176,7 +1176,7 @@ fn read_manifest_entry<R: std::io::Read>(
         .next()
         .context("Manifest Entry Expected")??;
     apache_avro::from_value::<ManifestEntryV2>(&record)
-        .map(|entry| ManifestEntry::V2(entry))
+        .map(ManifestEntry::V2)
         .map_err(anyhow::Error::msg)
 }
 

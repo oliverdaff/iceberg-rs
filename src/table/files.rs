@@ -77,11 +77,11 @@ fn avro_value_to_manifest_entry(
     match format_version {
         FormatVersion::V1 => entry
             .and_then(|value| apache_avro::from_value::<ManifestEntryV1>(&value))
-            .map(|entry| ManifestEntry::V1(entry))
+            .map(ManifestEntry::V1)
             .map_err(anyhow::Error::msg),
         FormatVersion::V2 => entry
             .and_then(|value| apache_avro::from_value::<ManifestEntryV2>(&value))
-            .map(|entry| ManifestEntry::V2(entry))
+            .map(ManifestEntry::V2)
             .map_err(anyhow::Error::msg),
     }
 }

@@ -56,7 +56,7 @@ impl<'table> PruningStatistics for PruneManifests<'table> {
                             .map(|(field, summary)| {
                                 if field.source_id == column_id as i32 {
                                     summary.lower_bound.as_ref().and_then(|min| {
-                                        bytes_to_any(&min, &datatype.try_into().ok()?).ok()
+                                        bytes_to_any(min, &datatype.try_into().ok()?).ok()
                                     })
                                 } else {
                                     None
@@ -86,7 +86,7 @@ impl<'table> PruningStatistics for PruneManifests<'table> {
                             .map(|(field, summary)| {
                                 if field.source_id == column_id as i32 {
                                     summary.upper_bound.as_ref().and_then(|min| {
-                                        bytes_to_any(&min, &datatype.try_into().ok()?).ok()
+                                        bytes_to_any(min, &datatype.try_into().ok()?).ok()
                                     })
                                 } else {
                                     None
@@ -117,7 +117,7 @@ impl<'table> PruningStatistics for PruneManifests<'table> {
                             .zip(partitions)
                             .map(|(field, summary)| {
                                 if field.source_id == column_id as i32 {
-                                    if summary.contains_null == false {
+                                    if !summary.contains_null {
                                         Some(0)
                                     } else {
                                         None
@@ -130,7 +130,7 @@ impl<'table> PruningStatistics for PruneManifests<'table> {
                     }
                     None => None,
                 });
-        ScalarValue::iter_to_array(contains_null.map(|opt| ScalarValue::Int32(opt))).ok()
+        ScalarValue::iter_to_array(contains_null.map(ScalarValue::Int32)).ok()
     }
 }
 
@@ -156,7 +156,7 @@ impl<'table, 'manifests> PruningStatistics for PruneDataFiles<'table, 'manifests
             .map(|manifest| match &manifest.lower_bounds() {
                 Some(map) => map
                     .get(&(column_id as i32))
-                    .and_then(|value| bytes_to_any(&value, &datatype.try_into().ok()?).ok()),
+                    .and_then(|value| bytes_to_any(value, &datatype.try_into().ok()?).ok()),
                 None => None,
             });
         any_iter_to_array(min_values, datatype).ok()
@@ -171,7 +171,7 @@ impl<'table, 'manifests> PruningStatistics for PruneDataFiles<'table, 'manifests
             .map(|manifest| match &manifest.upper_bounds() {
                 Some(map) => map
                     .get(&(column_id as i32))
-                    .and_then(|value| bytes_to_any(&value, &datatype.try_into().ok()?).ok()),
+                    .and_then(|value| bytes_to_any(value, &datatype.try_into().ok()?).ok()),
                 None => None,
             });
         any_iter_to_array(max_values, datatype).ok()
@@ -186,10 +186,10 @@ impl<'table, 'manifests> PruningStatistics for PruneDataFiles<'table, 'manifests
             .files
             .iter()
             .map(|manifest| match &manifest.null_value_counts() {
-                Some(map) => map.get(&(column_id as i32)).map(|value| *value),
+                Some(map) => map.get(&(column_id as i32)).copied(),
                 None => None,
             });
-        ScalarValue::iter_to_array(null_counts.map(|opt| ScalarValue::Int64(opt))).ok()
+        ScalarValue::iter_to_array(null_counts.map(ScalarValue::Int64)).ok()
     }
 }
 

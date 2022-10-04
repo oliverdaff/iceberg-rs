@@ -220,7 +220,7 @@ impl TableProvider for DataFusionTable {
             projection
                 .iter()
                 .map(|idx| {
-                    if partition_ids.contains(&idx) {
+                    if partition_ids.contains(idx) {
                         file_schema.fields.len()
                             + partition_ids.iter().position(|x| x == idx).unwrap()
                     } else {
@@ -234,11 +234,11 @@ impl TableProvider for DataFusionTable {
 
         let file_scan_config = FileScanConfig {
             object_store_url,
-            file_schema: file_schema,
+            file_schema,
             file_groups: file_groups.into_values().collect(),
             statistics,
-            projection: projection,
-            limit: limit.clone(),
+            projection,
+            limit,
             table_partition_cols,
         };
         ParquetFormat::default()
@@ -251,7 +251,7 @@ impl TableProvider for DataFusionTable {
 mod tests {
 
     use datafusion::{
-        arrow::{self, record_batch::RecordBatch},
+        arrow::{array::Float32Array, record_batch::RecordBatch},
         prelude::SessionContext,
     };
     use object_store::{local::LocalFileSystem, ObjectStore};
@@ -274,19 +274,26 @@ mod tests {
         ctx.register_table("nyc_taxis", table).unwrap();
 
         let df = ctx
-            .sql("SELECT vendor_id, MIN(trip_distance) FROM nyc_taxis GROUP BY vendor_id LIMIT 100")
+            .sql("SELECT vendor_id, MIN(trip_distance) FROM nyc_taxis GROUP BY vendor_id")
             .await
             .unwrap();
 
         // execute the plan
         let results: Vec<RecordBatch> = df.collect().await.expect("Failed to execute query plan.");
 
-        // format the results
-        let pretty_results = arrow::util::pretty::pretty_format_batches(&results)
-            .expect("Failed to print result")
-            .to_string();
-        dbg!(pretty_results);
-        panic!()
+        let batch = results
+            .into_iter()
+            .find(|batch| batch.num_rows() > 0)
+            .expect("All record batches are empty");
+
+        let values = batch
+            .column(1)
+            .as_any()
+            .downcast_ref::<Float32Array>()
+            .expect("Failed to get values from batch.");
+
+        // Value can either be 0.9 or 1.8
+        assert!(((1.35 - values.value(0)).abs() - 0.45).abs() < 0.001)
     }
 
     #[tokio::test]
@@ -312,11 +319,11 @@ mod tests {
         // execute the plan
         let results: Vec<RecordBatch> = df.collect().await.expect("Failed to execute query plan.");
 
-        // format the results
-        let pretty_results = arrow::util::pretty::pretty_format_batches(&results)
-            .expect("Failed to print result")
-            .to_string();
-        dbg!(pretty_results);
-        panic!()
+        let values = results[0]
+            .column(1)
+            .as_any()
+            .downcast_ref::<Float32Array>()
+            .expect("Failed to get values from result.");
+        assert_eq!(values.value(0), 1.8)
     }
 }

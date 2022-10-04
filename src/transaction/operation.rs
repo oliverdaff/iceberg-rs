@@ -179,7 +179,7 @@ impl Operation {
                             .bytes()
                             .await?
                             .into();
-                        if bytes.len() > 0 {
+                        if !bytes.is_empty() {
                             let reader = apache_avro::Reader::new(&*bytes)?;
                             manifest_list_writer.extend(reader.filter_map(Result::ok))?;
                         }
@@ -218,7 +218,7 @@ impl Operation {
                             .bytes()
                             .await?
                             .into();
-                        if bytes.len() > 0 {
+                        if !bytes.is_empty() {
                             let reader = apache_avro::Reader::new(&*bytes)?;
                             manifest_list_writer.extend(reader.filter_map(Result::ok))?;
                         }
