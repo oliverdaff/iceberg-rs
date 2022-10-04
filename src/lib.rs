@@ -24,3 +24,5 @@ pub mod table;
 pub mod util;
 
 pub use object_store;
+
+pub mod view_spec;
