@@ -68,12 +68,50 @@ pub struct Summary {
     engine_version: Option<String>,
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
+#[repr(u8)]
+/// Name of file format
+pub enum RepresentationType {
+    /// Avro file
+    Sql = 0,
+}
+
+/// Serialize for PrimitiveType wit special handling for
+/// Decimal and Fixed types.
+impl Serialize for RepresentationType {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use RepresentationType::*;
+        match self {
+            Sql => serializer.serialize_str("sql"),
+        }
+    }
+}
+
+/// Serialize for PrimitiveType wit special handling for
+/// Decimal and Fixed types.
+impl<'de> Deserialize<'de> for RepresentationType {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        if s == "sql" {
+            Ok(RepresentationType::Sql)
+        } else {
+            Err(serde::de::Error::custom("Invalid data file format."))
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "format-version")]
 /// Fields for the version 2 of the view metadata.
 pub struct Representation {
     /// A string indicating the type of representation. It is set to “sql” for this type.
-    r#type: String,
+    r#type: RepresentationType,
     /// A string representing the original view definition in SQL
     sql: String,
     /// A string specifying the dialect of the ‘sql’ field. It can be used by the engines to detect the SQL dialect.
