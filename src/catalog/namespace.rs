@@ -5,7 +5,7 @@ Defining the [Namespace] struct for handling namespaces in the catalog.
 use core::fmt::{self, Display};
 use itertools::Itertools;
 
-use crate::catalog::table_identifier::SEPARATOR;
+use crate::catalog::identifier::SEPARATOR;
 
 use anyhow::{anyhow, Result};
 

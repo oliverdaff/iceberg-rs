@@ -6,7 +6,7 @@ use futures::StreamExt;
 use object_store::path::Path;
 use uuid::Uuid;
 
-use crate::{model::schema::SchemaV2, table::Table};
+use crate::{catalog::TableLike, model::schema::SchemaV2, table::Table};
 use anyhow::{anyhow, Result};
 
 use self::operation::Operation;
@@ -14,15 +14,15 @@ use self::operation::Operation;
 mod operation;
 
 /// Transactions let you perform a sequence of [Operation]s that can be committed to be performed with ACID guarantees.
-pub struct Transaction<'table> {
+pub struct TableTransaction<'table> {
     table: &'table mut Table,
     operations: Vec<Operation>,
 }
 
-impl<'table> Transaction<'table> {
+impl<'table> TableTransaction<'table> {
     /// Create a transaction for the given table.
     pub fn new(table: &'table mut Table) -> Self {
-        Transaction {
+        TableTransaction {
             table,
             operations: vec![],
         }
@@ -80,16 +80,22 @@ impl<'table> Transaction<'table> {
                     .await
                     .map_err(|err| anyhow!(err.to_string()))?;
                 let previous_metadata_file_location = table.metadata_location();
-                let new_table = catalog
+                if let TableLike::Table(new_table) = catalog
                     .clone()
                     .update_table(
                         identifier.clone(),
                         metadata_file_location.as_ref(),
                         previous_metadata_file_location,
                     )
-                    .await?;
-                *table = new_table;
-                Ok(())
+                    .await?
+                {
+                    *table = new_table;
+                    Ok(())
+                } else {
+                    Err(anyhow!(
+                        "Updating the table for the transaction didn't return a table."
+                    ))
+                }
             }
             // In case of a filesystem table, write the metadata to the object storage and perform the atomic swap of the metadata file
             (_, _) => {

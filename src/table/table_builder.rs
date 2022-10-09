@@ -9,7 +9,8 @@ use object_store::path::Path;
 use object_store::ObjectStore;
 use uuid::Uuid;
 
-use crate::catalog::table_identifier::TableIdentifier;
+use crate::catalog::identifier::Identifier;
+use crate::catalog::TableLike;
 use crate::model::partition::{PartitionField, Transform};
 use crate::model::sort::{NullOrder, SortDirection, SortField, SortOrder};
 use crate::model::{partition::PartitionSpec, schema::SchemaV2, table_metadata::TableMetadataV2};
@@ -29,7 +30,7 @@ impl TableBuilder {
     pub fn new_metastore_table(
         location: &str,
         schema: SchemaV2,
-        identifier: TableIdentifier,
+        identifier: Identifier,
         catalog: Arc<dyn Catalog>,
     ) -> Result<Self> {
         let partition_spec = PartitionSpec {
@@ -151,8 +152,13 @@ impl TableBuilder {
                     .put(&path, metadata_json.into())
                     .await
                     .map_err(|err| anyhow!(err.to_string()))?;
-                let table = catalog.register_table(identifier, path.as_ref()).await?;
-                Ok(table)
+                if let TableLike::Table(table) =
+                    catalog.register_table(identifier, path.as_ref()).await?
+                {
+                    Ok(table)
+                } else {
+                    Err(anyhow!("Building the table failed because registering the table in the catalog didn't return a table."))
+                }
             }
             TableType::FileSystem(object_store) => {
                 let location = &self.metadata.location;

@@ -1,5 +1,5 @@
 /*!
-Defining the [TableIdentifier] struct for identifying tables in an iceberg catalog.
+Defining the [Identifier] struct for identifying tables in an iceberg catalog.
 */
 
 use core::fmt::{self, Display};
@@ -12,13 +12,13 @@ pub static SEPARATOR: &str = ".";
 
 ///Identifies a table in an iceberg catalog.
 #[derive(Clone)]
-pub struct TableIdentifier {
+pub struct Identifier {
     namespace: Namespace,
     name: String,
 }
 
-impl TableIdentifier {
-    ///Create TableIdentifier
+impl Identifier {
+    ///Create Identifier
     pub fn try_new(names: &[String]) -> Result<Self> {
         let length = names.len();
         if names.is_empty() {
@@ -28,7 +28,7 @@ impl TableIdentifier {
         } else if names[length - 1].is_empty() {
             Err(anyhow!("Error: Table name cannot be empty.",))
         } else {
-            Ok(TableIdentifier {
+            Ok(Identifier {
                 namespace: Namespace::try_new(&names[0..length - 1])?,
                 name: names[length - 1].clone(),
             })
@@ -40,7 +40,7 @@ impl TableIdentifier {
             .split(SEPARATOR)
             .map(|x| x.to_string())
             .collect::<Vec<String>>();
-        TableIdentifier::try_new(&names)
+        Identifier::try_new(&names)
     }
     /// Return namespace of table
     pub fn namespace(&self) -> &Namespace {
@@ -52,7 +52,7 @@ impl TableIdentifier {
     }
 }
 
-impl Display for TableIdentifier {
+impl Display for Identifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}{}{}", self.namespace, SEPARATOR, self.name)
     }
@@ -61,11 +61,11 @@ impl Display for TableIdentifier {
 #[cfg(test)]
 
 mod tests {
-    use super::TableIdentifier;
+    use super::Identifier;
 
     #[test]
     fn test_new() {
-        let identifier = TableIdentifier::try_new(&vec![
+        let identifier = Identifier::try_new(&vec![
             "level1".to_string(),
             "level2".to_string(),
             "table".to_string(),
@@ -76,7 +76,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_empty() {
-        let _ = TableIdentifier::try_new(&vec![
+        let _ = Identifier::try_new(&vec![
             "level1".to_string(),
             "level2".to_string(),
             "".to_string(),
@@ -86,11 +86,11 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_empty_identifier() {
-        let _ = TableIdentifier::try_new(&vec![]).unwrap();
+        let _ = Identifier::try_new(&vec![]).unwrap();
     }
     #[test]
     fn test_parse() {
-        let identifier = TableIdentifier::parse("level1.level2.table").unwrap();
+        let identifier = Identifier::parse("level1.level2.table").unwrap();
         assert_eq!(&format!("{}", identifier), "level1.level2.table");
     }
 }
