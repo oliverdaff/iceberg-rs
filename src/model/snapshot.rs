@@ -94,7 +94,7 @@ impl From<SnapshotV1> for SnapshotV2 {
             parent_snapshot_id: v1.parent_snapshot_id,
             sequence_number: 0,
             timestamp_ms: v1.timestamp_ms,
-            manifest_list: v1.manifest_list.unwrap_or_else(|| "".to_owned()),
+            manifest_list: v1.manifest_list.unwrap_or_default(),
             summary: v1.summary.unwrap_or(Summary {
                 operation: None,
                 other: HashMap::new(),
