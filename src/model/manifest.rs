@@ -6,6 +6,8 @@ use std::{
     fmt,
 };
 
+use std::ops::Deref;
+
 use anyhow::{anyhow, Context, Result};
 use serde::{
     de::{DeserializeOwned, MapAccess, Visitor},
@@ -355,9 +357,13 @@ impl PartitionValues {
             .to_owned()
             + r#"]}"#)
     }
-    /// Iterate over values
-    pub fn iter(&self) -> std::slice::Iter<'_, Option<Value>> {
-        self.fields.iter()
+}
+
+impl Deref for PartitionValues {
+    type Target = [Option<Value>];
+
+    fn deref(&self) -> &Self::Target {
+        &self.fields
     }
 }
 
