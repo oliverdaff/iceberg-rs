@@ -29,8 +29,17 @@ pub struct Manifest {
 
 /// Lists data files or delete files, along with each file’s
 /// partition data tuple, metrics, and tracking information.
+pub enum ManifestMetadata {
+    /// Version 2 of the manifest metadata
+    V2(ManifestMetadataV2),
+    /// Version 1 of the manifest metadata
+    V1(ManifestMetadataV1),
+}
+
+/// Lists data files or delete files, along with each file’s
+/// partition data tuple, metrics, and tracking information.
 /// Should this be called metadata?
-pub struct ManifestMetadata {
+pub struct ManifestMetadataV1 {
     /// JSON representation of the table schema at the time the manifest was written
     /// Should this be Typed?
     pub schema: String,
@@ -38,13 +47,31 @@ pub struct ManifestMetadata {
     /// Should this be typed into a
     pub schema_id: Option<String>,
     /// JSON fields representation of the partition spec used to write the manifest
-    pub partition_spec: Option<String>,
+    pub partition_spec: String,
     /// ID of the partition spec used to write the manifest as a string
     pub partition_spec_id: Option<String>,
     /// Table format version number of the manifest as a string
     pub format_version: Option<FormatVersion>,
+}
+
+/// Lists data files or delete files, along with each file’s
+/// partition data tuple, metrics, and tracking information.
+/// Should this be called metadata?
+pub struct ManifestMetadataV2 {
+    /// JSON representation of the table schema at the time the manifest was written
+    /// Should this be Typed?
+    pub schema: String,
+    /// ID of the schema used to write the manifest as a string
+    /// Should this be typed into a
+    pub schema_id: String,
+    /// JSON fields representation of the partition spec used to write the manifest
+    pub partition_spec: String,
+    /// ID of the partition spec used to write the manifest as a string
+    pub partition_spec_id: String,
+    /// Table format version number of the manifest as a string
+    pub format_version: FormatVersion,
     /// Type of content files tracked by the manifest: “data” or “deletes”
-    pub content: Option<String>,
+    pub content: String,
 }
 
 #[derive(Debug, Serialize_repr, Deserialize_repr, PartialEq, Eq, Clone)]
@@ -1152,23 +1179,42 @@ fn read_metadata<R: std::io::Read>(reader: &apache_avro::Reader<R>) -> Result<Ma
             .transpose()
     };
 
-    let schema = read_string("schema")?.context("Metadata must have table schema")?;
-    let schema_id = read_string("schema-id")?;
-    let partition_spec = read_string("partition-spec")?;
-    let partition_spec_id = read_string("partition-spec-id")?;
     let format_version: Option<FormatVersion> = reader
         .user_metadata()
         .get("format-version")
         .and_then(|n| n[0].try_into().ok());
-    let content = read_string("content")?;
-    Ok(ManifestMetadata {
-        schema,
-        schema_id,
-        partition_spec,
-        partition_spec_id,
-        format_version,
-        content,
-    })
+    match format_version {
+        Some(FormatVersion::V2) => {
+            let schema = read_string("schema")?.context("Metadata must have table schema")?;
+            let schema_id = read_string("schema-id")?.unwrap();
+            let partition_spec = read_string("partition-spec")?.unwrap();
+            let partition_spec_id = read_string("partition-spec-id")?.unwrap();
+            let content = read_string("content")?.unwrap();
+
+            Ok(ManifestMetadata::V2(ManifestMetadataV2 {
+                schema,
+                schema_id,
+                partition_spec,
+                partition_spec_id,
+                format_version: format_version.unwrap(),
+                content,
+            }))
+        }
+        _ => {
+            let schema = read_string("schema")?.context("Metadata must have table schema")?;
+            let schema_id = read_string("schema-id")?;
+            let partition_spec = read_string("partition-spec")?.unwrap();
+            let partition_spec_id = read_string("partition-spec-id")?;
+
+            Ok(ManifestMetadata::V1(ManifestMetadataV1 {
+                schema,
+                schema_id,
+                partition_spec,
+                partition_spec_id,
+                format_version,
+            }))
+        }
+    }
 }
 
 fn read_manifest_entry<R: std::io::Read>(
@@ -1377,13 +1423,16 @@ mod tests {
             let encoded = writer.into_inner().unwrap();
 
             let reader = apache_avro::Reader::new( &encoded[..]).unwrap();
-            let metadata = read_metadata(&reader).unwrap();
-            assert_eq!(metadata.schema, table_schema.to_string());
-            assert_eq!(metadata.schema_id, Some(table_schema_id.to_string()));
-            assert_eq!(metadata.partition_spec, Some(partition_spec.to_string()));
-            assert_eq!(metadata.partition_spec_id, Some(partition_spec_id.to_string()));
-            assert_eq!(metadata.format_version, Some(format_version));
-            assert_eq!(metadata.content, Some(content.to_string()));
+            if let ManifestMetadata::V1(metadata) = read_metadata(&reader).unwrap() {
+                assert_eq!(metadata.schema, table_schema.to_string());
+                assert_eq!(metadata.schema_id, Some(table_schema_id.to_string()));
+                assert_eq!(metadata.partition_spec, partition_spec.to_string());
+                assert_eq!(metadata.partition_spec_id, Some(partition_spec_id.to_string()));
+                assert_eq!(metadata.format_version, Some(format_version));
+            } else {
+                panic!()
+            };
+
         }
     #[test]
     fn test_read_manifest_entry(a in arb_manifest_entry()) {
