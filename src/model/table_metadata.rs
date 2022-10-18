@@ -3,6 +3,8 @@ Defines the [table metadata](https://iceberg.apache.org/spec/#table-metadata).
 The main struct here is [TableMetadataV2] which defines the data for a table.
 */
 
+use anyhow::{anyhow, Ok};
+
 use std::{cmp, collections::HashMap};
 
 use crate::model::{
@@ -11,7 +13,9 @@ use crate::model::{
     snapshot::{Reference, SnapshotV1, SnapshotV2},
     sort,
 };
+
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use uuid::Uuid;
 
 use super::{partition::PartitionField, schema::SchemaStruct};
@@ -226,12 +230,36 @@ pub struct SnapshotLog {
     pub timestamp_ms: i64,
 }
 
+#[derive(Debug, Serialize_repr, Deserialize_repr, PartialEq, Eq, Clone)]
+#[repr(u8)]
 /// Iceberg format version
 pub enum FormatVersion {
     /// Iceberg spec version 1
-    V1,
+    V1 = '1' as u8,
     /// Iceberg spec version 2
-    V2,
+    V2 = '2' as u8,
+}
+
+impl TryFrom<u8> for FormatVersion {
+    type Error = anyhow::Error;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match char::from_u32(value as u32)
+            .ok_or_else(|| anyhow!("Failed to convert u8 to char."))?
+        {
+            '1' => Ok(FormatVersion::V1),
+            '2' => Ok(FormatVersion::V2),
+            _ => Err(anyhow!("Failed to convert u8 to FormatVersion.")),
+        }
+    }
+}
+
+impl From<FormatVersion> for u8 {
+    fn from(value: FormatVersion) -> Self {
+        match value {
+            FormatVersion::V1 => '1' as u8,
+            FormatVersion::V2 => '2' as u8,
+        }
+    }
 }
 
 impl TableMetadata {

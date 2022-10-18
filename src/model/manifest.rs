@@ -42,7 +42,7 @@ pub struct ManifestMetadata {
     /// ID of the partition spec used to write the manifest as a string
     pub partition_spec_id: Option<String>,
     /// Table format version number of the manifest as a string
-    pub format_version: Option<String>,
+    pub format_version: Option<FormatVersion>,
     /// Type of content files tracked by the manifest: “data” or “deletes”
     pub content: Option<String>,
 }
@@ -1156,7 +1156,10 @@ fn read_metadata<R: std::io::Read>(reader: &apache_avro::Reader<R>) -> Result<Ma
     let schema_id = read_string("schema-id")?;
     let partition_spec = read_string("partition-spec")?;
     let partition_spec_id = read_string("partition-spec-id")?;
-    let format_version = read_string("format-version")?;
+    let format_version: Option<FormatVersion> = reader
+        .user_metadata()
+        .get("format-version")
+        .and_then(|n| n[0].try_into().ok());
     let content = read_string("content")?;
     Ok(ManifestMetadata {
         schema,
@@ -1277,7 +1280,7 @@ mod tests {
             // TODO: make this a correct schema
             let table_schema = r#"{"schema": "0"}"#;
             let table_schema_id = "1";
-            let format_version = "1";
+            let format_version = FormatVersion::V1;
             let content = "data";
 
             let meta: std::collections::HashMap<String, apache_avro::types::Value> =
@@ -1286,7 +1289,7 @@ mod tests {
                     ("schema-id".to_string(), AvroValue::Bytes(table_schema_id.into())),
                     ("partition-spec".to_string(), AvroValue::Bytes(partition_spec.into())),
                     ("partition-spec-id".to_string(), AvroValue::Bytes(partition_spec_id.into())),
-                    ("format-version".to_string(), AvroValue::Bytes(format_version.into())),
+                    ("format-version".to_string(), AvroValue::Bytes(vec![u8::from(format_version)])),
                     ("content".to_string(), AvroValue::Bytes(content.into()))
                     ],
                 );
@@ -1351,7 +1354,7 @@ mod tests {
             // TODO: make this a correct schema
             let table_schema = r#"{"schema": "0"}"#;
             let table_schema_id = "1";
-            let format_version = "1";
+            let format_version = FormatVersion::V1;
             let content = "data";
 
             let meta: std::collections::HashMap<String, apache_avro::types::Value> =
@@ -1360,7 +1363,7 @@ mod tests {
                     ("schema-id".to_string(), AvroValue::Bytes(table_schema_id.into())),
                     ("partition-spec".to_string(), AvroValue::Bytes(partition_spec.into())),
                     ("partition-spec-id".to_string(), AvroValue::Bytes(partition_spec_id.into())),
-                    ("format-version".to_string(), AvroValue::Bytes(format_version.into())),
+                    ("format-version".to_string(), AvroValue::Bytes(vec![u8::from(format_version.clone())])),
                     ("content".to_string(), AvroValue::Bytes(content.into()))
                     ],
                 );
@@ -1379,7 +1382,7 @@ mod tests {
             assert_eq!(metadata.schema_id, Some(table_schema_id.to_string()));
             assert_eq!(metadata.partition_spec, Some(partition_spec.to_string()));
             assert_eq!(metadata.partition_spec_id, Some(partition_spec_id.to_string()));
-            assert_eq!(metadata.format_version, Some(format_version.to_string()));
+            assert_eq!(metadata.format_version, Some(format_version));
             assert_eq!(metadata.content, Some(content.to_string()));
         }
     #[test]
