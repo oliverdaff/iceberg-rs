@@ -73,7 +73,7 @@ pub struct ManifestMetadataV2 {
     /// Table format version number of the manifest as a string
     pub format_version: FormatVersion,
     /// Type of content files tracked by the manifest: “data” or “deletes”
-    pub content: String,
+    pub content: Content,
 }
 
 #[derive(Debug, Serialize_repr, Deserialize_repr, PartialEq, Eq, Clone)]
@@ -262,6 +262,28 @@ pub enum Content {
     PositionDeletes = 1,
     /// Delete by equality.
     EqualityDeletes = 2,
+}
+
+impl TryFrom<Vec<u8>> for Content {
+    type Error = anyhow::Error;
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        match String::from_utf8(value)?.to_uppercase().as_str() {
+            "DATA" => Ok(Content::Data),
+            "POSITION DELETES" => Ok(Content::PositionDeletes),
+            "EQUALITY DELETES" => Ok(Content::EqualityDeletes),
+            _ => Err(anyhow!("Failed to convert String to Content.")),
+        }
+    }
+}
+
+impl From<Content> for Vec<u8> {
+    fn from(value: Content) -> Self {
+        match value {
+            Content::Data => "DATA".as_bytes().to_owned(),
+            Content::PositionDeletes => "POSITION DELETES".as_bytes().to_owned(),
+            Content::EqualityDeletes => "EQUALITY DELETES".as_bytes().to_owned(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -1195,7 +1217,11 @@ fn read_metadata<R: std::io::Read>(reader: &apache_avro::Reader<R>) -> Result<Ma
             let schema_id = read_string("schema-id")?.unwrap();
             let partition_spec = read_string("partition-spec")?.unwrap();
             let partition_spec_id = read_string("partition-spec-id")?.unwrap();
-            let content = read_string("content")?.unwrap();
+            let content: Content = reader
+                .user_metadata()
+                .get("content")
+                .and_then(|n| n.clone().try_into().ok())
+                .unwrap();
 
             Ok(ManifestMetadata::V2(ManifestMetadataV2 {
                 schema,
@@ -1333,7 +1359,7 @@ mod tests {
             let table_schema = r#"{"schema": "0"}"#;
             let table_schema_id = "1";
             let format_version = FormatVersion::V1;
-            let content = "data";
+            let content = "DATA";
 
             let meta: std::collections::HashMap<String, apache_avro::types::Value> =
                 std::collections::HashMap::from_iter(vec![
@@ -1407,7 +1433,7 @@ mod tests {
             let table_schema = r#"{"schema": "0"}"#;
             let table_schema_id = "1";
             let format_version = FormatVersion::V1;
-            let content = "data";
+            let content = "DATA";
 
             let meta: std::collections::HashMap<String, apache_avro::types::Value> =
                 std::collections::HashMap::from_iter(vec![
@@ -1486,7 +1512,7 @@ mod tests {
             let table_schema = r#"{"schema": "0"}"#;
             let table_schema_id = "1";
             let format_version = "1";
-            let content = "data";
+            let content = "DATA";
 
             let meta: std::collections::HashMap<String, apache_avro::types::Value> =
                 std::collections::HashMap::from_iter(vec![
