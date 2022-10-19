@@ -136,7 +136,7 @@ mod tests {
 
     use anyhow::Result;
 
-    use crate::view_spec::view_metadata::ViewMetadata;
+    use crate::view::spec::view_metadata::ViewMetadata;
 
     #[test]
     fn test_deserialize_view_data_v1() -> Result<()> {

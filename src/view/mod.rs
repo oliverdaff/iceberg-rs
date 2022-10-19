@@ -2,7 +2,9 @@
  * Defines the [View] struct that represents an iceberg view.
 */
 
-use crate::view_spec::view_metadata::ViewMetadata;
+pub mod spec;
+
+use spec::view_metadata::ViewMetadata;
 
 /// An iceberg view
 pub struct View {

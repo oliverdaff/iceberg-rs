@@ -25,5 +25,3 @@ pub mod util;
 pub mod view;
 
 pub use object_store;
-
-pub mod view_spec;
