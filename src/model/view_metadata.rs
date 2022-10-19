@@ -6,7 +6,9 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::model::schema::SchemaStruct;
+use crate::model::schema::Schema;
+
+use super::schema::SchemaStruct;
 
 /// Metadata of an iceberg view
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -16,26 +18,62 @@ pub enum ViewMetadata {
     V1(ViewMetadataV1),
 }
 
+impl ViewMetadata {
+    /// Get current schema of the table
+    pub fn current_schema(&self) -> Option<&SchemaStruct> {
+        match self {
+            ViewMetadata::V1(metadata) => metadata
+                .schemas
+                .as_ref()?
+                .iter()
+                .find(|schema| match schema {
+                    Schema::V2(schema) => {
+                        if let Some(id) = metadata.current_schema_id {
+                            schema.schema_id == id
+                        } else {
+                            false
+                        }
+                    }
+                    Schema::V1(schema) => schema.schema_id == metadata.current_schema_id,
+                })
+                .or(metadata.schemas.as_ref()?.iter().last())
+                .map(|x| x.struct_fields()),
+        }
+    }
+    /// Get the base location of the table
+    pub fn location(&self) -> &str {
+        match self {
+            ViewMetadata::V1(metadata) => &metadata.location,
+        }
+    }
+    /// Get the last_sequence_number of the table
+    pub fn current_version_id(&self) -> i64 {
+        match self {
+            ViewMetadata::V1(metadata) => metadata.current_version_id,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "format-version")]
 /// Fields for the version 1 of the view metadata.
 pub struct ViewMetadataV1 {
     /// The view’s base location. This is used to determine where to store manifest files and view metadata files.
-    location: String,
+    pub location: String,
     ///	Current version of the view. Set to ‘1’ when the view is first created.
-    current_version_id: i64,
+    pub current_version_id: i64,
     /// An array of structs describing the last known versions of the view. Controlled by the table property: “version.history.num-entries”. See section Versions.
-    versions: Vec<Version>,
+    pub versions: Vec<Version>,
     /// A list of timestamp and version ID pairs that encodes changes to the current version for the view.
     /// Each time the current-version-id is changed, a new entry should be added with the last-updated-ms and the new current-version-id.
-    version_log: Vec<VersionLogStruct>,
+    pub version_log: Vec<VersionLogStruct>,
     /// A string to string map of view properties. This is used for metadata such as “comment” and for settings that affect view maintenance.
     /// This is not intended to be used for arbitrary metadata.
-    properties: Option<HashMap<String, String>>,
+    pub properties: Option<HashMap<String, String>>,
     ///	A list of schemas, the same as the ‘schemas’ field from Iceberg table spec.
-    schemas: Option<Vec<SchemaStruct>>,
+    pub schemas: Option<Vec<Schema>>,
     ///	ID of the current schema of the view
-    current_schema_id: Option<i64>,
+    pub current_schema_id: Option<i32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -136,7 +174,7 @@ mod tests {
 
     use anyhow::Result;
 
-    use crate::view::spec::view_metadata::ViewMetadata;
+    use crate::model::view_metadata::ViewMetadata;
 
     #[test]
     fn test_deserialize_view_data_v1() -> Result<()> {

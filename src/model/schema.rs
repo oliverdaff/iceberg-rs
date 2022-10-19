@@ -233,6 +233,26 @@ pub struct StructField {
     pub doc: Option<String>,
 }
 
+/// Schema of an iceberg table
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum Schema {
+    /// Version 2 of the table schema
+    V2(SchemaV2),
+    /// Version 1 of the table schema
+    V1(SchemaV1),
+}
+
+impl Schema {
+    /// Struct fields of the schema
+    pub fn struct_fields(&self) -> &SchemaStruct {
+        match self {
+            Schema::V2(schema) => &schema.struct_fields,
+            Schema::V1(schema) => &schema.struct_fields,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 /// Names and types of fields in a table.

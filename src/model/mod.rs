@@ -72,3 +72,4 @@ pub mod snapshot;
 pub mod sort;
 pub mod table_metadata;
 pub mod types;
+pub mod view_metadata;
