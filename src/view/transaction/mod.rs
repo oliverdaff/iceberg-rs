@@ -22,16 +22,22 @@ pub struct Transaction<'view> {
 }
 
 impl<'view> Transaction<'view> {
-    /// Create a transaction for the given table.
+    /// Create a transaction for the given view.
     pub fn new(view: &'view mut View) -> Self {
         Transaction {
             view,
             operations: vec![],
         }
     }
-    /// Update the schmema of the table
+    /// Update the schmema of the view
     pub fn update_schema(mut self, schema: Schema) -> Self {
         self.operations.push(ViewOperation::UpdateSchema(schema));
+        self
+    }
+    /// Update the location of the view
+    pub fn update_location(mut self, location: &str) -> Self {
+        self.operations
+            .push(ViewOperation::UpdateLocation(location.to_owned()));
         self
     }
     /// Commit the transaction to perform the [Operation]s with ACID guarantees.
@@ -42,10 +48,10 @@ impl<'view> Transaction<'view> {
         let view = futures::stream::iter(self.operations)
             .fold(
                 Ok::<&mut View, anyhow::Error>(self.view),
-                |table, op| async move {
-                    let table = table?;
-                    op.execute(table).await?;
-                    Ok(table)
+                |view, op| async move {
+                    let view = view?;
+                    op.execute(view).await?;
+                    Ok(view)
                 },
             )
             .await?;

@@ -18,6 +18,7 @@ use crate::{
 use self::transaction::Transaction as ViewTransaction;
 
 pub mod transaction;
+pub mod view_builder;
 
 /// An iceberg view
 pub struct View {
@@ -101,32 +102,32 @@ impl View {
             metadata_location,
         })
     }
-    /// Get the table identifier in the catalog. Returns None of it is a filesystem table.
+    /// Get the table identifier in the catalog. Returns None of it is a filesystem view.
     pub fn identifier(&self) -> Option<&Identifier> {
         match &self.table_type {
             TableType::FileSystem(_) => None,
             TableType::Metastore(identifier, _) => Some(identifier),
         }
     }
-    /// Get the catalog associated to the table. Returns None if the table is a filesystem table
+    /// Get the catalog associated to the view. Returns None if the view is a filesystem view
     pub fn catalog(&self) -> Option<&Arc<dyn Catalog>> {
         match &self.table_type {
             TableType::FileSystem(_) => None,
             TableType::Metastore(_, catalog) => Some(catalog),
         }
     }
-    /// Get the object_store associated to the table
+    /// Get the object_store associated to the view
     pub fn object_store(&self) -> Arc<dyn ObjectStore> {
         match &self.table_type {
             TableType::FileSystem(object_store) => Arc::clone(object_store),
             TableType::Metastore(_, catalog) => catalog.object_store(),
         }
     }
-    /// Get the metadata of the table
+    /// Get the schema of the view
     pub fn schema(&self) -> Option<&SchemaStruct> {
         self.metadata.current_schema()
     }
-    /// Get the metadata of the table
+    /// Get the metadata of the view
     pub fn metadata(&self) -> &ViewMetadata {
         &self.metadata
     }
@@ -134,7 +135,7 @@ impl View {
     pub fn metadata_location(&self) -> &str {
         &self.metadata_location
     }
-    /// Create a new transaction for this table
+    /// Create a new transaction for this view
     pub fn new_transaction(&mut self) -> ViewTransaction {
         ViewTransaction::new(self)
     }
@@ -149,5 +150,64 @@ impl View {
                 metadata.current_version_id += 1;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use std::sync::Arc;
+
+    use object_store::{memory::InMemory, ObjectStore};
+
+    use crate::{
+        model::schema::{AllType, PrimitiveType, SchemaStruct, SchemaV2, StructField},
+        view::view_builder::ViewBuilder,
+    };
+
+    #[tokio::test]
+    async fn test_increment_sequence_number() {
+        let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
+        let schema = SchemaV2 {
+            schema_id: 1,
+            identifier_field_ids: Some(vec![1, 2]),
+            name_mapping: None,
+            struct_fields: SchemaStruct {
+                fields: vec![
+                    StructField {
+                        id: 1,
+                        name: "one".to_string(),
+                        required: false,
+                        field_type: AllType::Primitive(PrimitiveType::String),
+                        doc: None,
+                    },
+                    StructField {
+                        id: 2,
+                        name: "two".to_string(),
+                        required: false,
+                        field_type: AllType::Primitive(PrimitiveType::String),
+                        doc: None,
+                    },
+                ],
+            },
+        };
+        let mut view = ViewBuilder::new_filesystem_view(
+            "SELECT trip_distance FROM nyc_taxis",
+            "test/view1",
+            schema,
+            Arc::clone(&object_store),
+        )
+        .unwrap()
+        .commit()
+        .await
+        .unwrap();
+
+        let metadata_location = view.metadata_location();
+        assert_eq!(metadata_location, "test/view1/metadata/v0.metadata.json");
+
+        let transaction = view.new_transaction();
+        transaction.commit().await.unwrap();
+        let metadata_location = view.metadata_location();
+        assert_eq!(metadata_location, "test/view1/metadata/v1.metadata.json");
     }
 }

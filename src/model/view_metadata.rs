@@ -81,13 +81,13 @@ pub struct ViewMetadataV1 {
 /// Fields for the version 2 of the view metadata.
 pub struct Version {
     /// Monotonically increasing id indicating the version of the view. Starts with 1.
-    version_id: i64,
+    pub version_id: i64,
     ///	Timestamp expressed in ms since epoch at which the version of the view was created.
-    timestamp_ms: i64,
+    pub timestamp_ms: i64,
     /// A string map summarizes the version changes, including operation, described in Summary.
-    summary: Summary,
+    pub summary: Summary,
     /// A list of “representations” as described in Representations.
-    representations: Vec<Representation>,
+    pub representations: Vec<Representation>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -95,9 +95,9 @@ pub struct Version {
 /// Fields for the version 2 of the view metadata.
 pub struct VersionLogStruct {
     ///	The timestamp when the referenced version was made the current version
-    timestamp_ms: i64,
+    pub timestamp_ms: i64,
     /// Version id of the view
-    version_id: i64,
+    pub version_id: i64,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -147,9 +147,9 @@ impl<'de> Deserialize<'de> for Operation {
 /// Fields for the version 2 of the view metadata.
 pub struct Summary {
     /// A string value indicating the view operation that caused this metadata to be created. Allowed values are “create” and “replace”.
-    operation: Operation,
+    pub operation: Operation,
     /// A string value indicating the version of the engine that performed the operation
-    engine_version: Option<String>,
+    pub engine_version: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
