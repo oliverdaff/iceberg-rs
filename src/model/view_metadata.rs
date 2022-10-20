@@ -55,7 +55,7 @@ impl ViewMetadata {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case", tag = "format-version")]
+#[serde(rename_all = "kebab-case")]
 /// Fields for the version 1 of the view metadata.
 pub struct ViewMetadataV1 {
     /// The view’s base location. This is used to determine where to store manifest files and view metadata files.
@@ -77,17 +77,21 @@ pub struct ViewMetadataV1 {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case", tag = "format-version")]
+#[serde(rename_all = "kebab-case")]
 /// Fields for the version 2 of the view metadata.
 pub struct Version {
     /// Monotonically increasing id indicating the version of the view. Starts with 1.
     version_id: i64,
     ///	Timestamp expressed in ms since epoch at which the version of the view was created.
     timestamp_ms: i64,
+    /// A string map summarizes the version changes, including operation, described in Summary.
+    summary: Summary,
+    /// A list of “representations” as described in Representations.
+    representations: Vec<Representation>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case", tag = "format-version")]
+#[serde(rename_all = "kebab-case")]
 /// Fields for the version 2 of the view metadata.
 pub struct VersionLogStruct {
     ///	The timestamp when the referenced version was made the current version
@@ -96,77 +100,83 @@ pub struct VersionLogStruct {
     version_id: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case", tag = "format-version")]
-/// Fields for the version 2 of the view metadata.
-pub struct Summary {
-    /// A string value indicating the view operation that caused this metadata to be created. Allowed values are “create” and “replace”.
-    operation: String,
-    /// A string value indicating the version of the engine that performed the operation
-    engine_version: Option<String>,
-}
-
 #[derive(Debug, PartialEq, Eq, Clone)]
-#[repr(u8)]
-/// Name of file format
-pub enum RepresentationType {
-    /// Avro file
-    Sql = 0,
+/// View operation that create the metadata file
+pub enum Operation {
+    /// Create view
+    Create,
+    /// Replace view
+    Replace,
 }
 
 /// Serialize for PrimitiveType wit special handling for
 /// Decimal and Fixed types.
-impl Serialize for RepresentationType {
+impl Serialize for Operation {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        use RepresentationType::*;
+        use Operation::*;
         match self {
-            Sql => serializer.serialize_str("sql"),
+            Create => serializer.serialize_str("create"),
+            Replace => serializer.serialize_str("replace"),
         }
     }
 }
 
 /// Serialize for PrimitiveType wit special handling for
 /// Decimal and Fixed types.
-impl<'de> Deserialize<'de> for RepresentationType {
+impl<'de> Deserialize<'de> for Operation {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        if s == "sql" {
-            Ok(RepresentationType::Sql)
+        if s == "create" {
+            Ok(Operation::Create)
+        } else if s == "replace" {
+            Ok(Operation::Replace)
         } else {
-            Err(serde::de::Error::custom("Invalid data file format."))
+            Err(serde::de::Error::custom("Invalid view operation."))
         }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case", tag = "format-version")]
+#[serde(rename_all = "kebab-case")]
 /// Fields for the version 2 of the view metadata.
-pub struct Representation {
-    /// A string indicating the type of representation. It is set to “sql” for this type.
-    r#type: RepresentationType,
-    /// A string representing the original view definition in SQL
-    sql: String,
-    /// A string specifying the dialect of the ‘sql’ field. It can be used by the engines to detect the SQL dialect.
-    dialect: String,
-    /// ID of the view’s schema when the version was created
-    schema_id: Option<i64>,
-    /// A string specifying the catalog to use when the table or view references in the view definition do not contain an explicit catalog.
-    default_catalog: Option<String>,
-    /// The namespace to use when the table or view references in the view definition do not contain an explicit namespace.
-    /// Since the namespace may contain multiple parts, it is serialized as a list of strings.
-    default_namespace: Option<Vec<String>>,
-    /// A list of strings of field aliases optionally specified in the create view statement.
-    /// The list should have the same length as the schema’s top level fields. See the example below.
-    field_aliases: Option<Vec<String>>,
-    /// A list of strings of field comments optionally specified in the create view statement.
-    /// The list should have the same length as the schema’s top level fields. See the example below.
-    field_docs: Option<Vec<String>>,
+pub struct Summary {
+    /// A string value indicating the view operation that caused this metadata to be created. Allowed values are “create” and “replace”.
+    operation: Operation,
+    /// A string value indicating the version of the engine that performed the operation
+    engine_version: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case", tag = "type")]
+/// Fields for the version 2 of the view metadata.
+pub enum Representation {
+    #[serde(rename = "sql")]
+    /// This type of representation stores the original view definition in SQL and its SQL dialect.
+    Sql {
+        /// A string representing the original view definition in SQL
+        sql: String,
+        /// A string specifying the dialect of the ‘sql’ field. It can be used by the engines to detect the SQL dialect.
+        dialect: String,
+        /// ID of the view’s schema when the version was created
+        schema_id: Option<i64>,
+        /// A string specifying the catalog to use when the table or view references in the view definition do not contain an explicit catalog.
+        default_catalog: Option<String>,
+        /// The namespace to use when the table or view references in the view definition do not contain an explicit namespace.
+        /// Since the namespace may contain multiple parts, it is serialized as a list of strings.
+        default_namespace: Option<Vec<String>>,
+        /// A list of strings of field aliases optionally specified in the create view statement.
+        /// The list should have the same length as the schema’s top level fields. See the example below.
+        field_aliases: Option<Vec<String>>,
+        /// A list of strings of field comments optionally specified in the create view statement.
+        /// The list should have the same length as the schema’s top level fields. See the example below.
+        field_docs: Option<Vec<String>>,
+    },
 }
 
 #[cfg(test)]
