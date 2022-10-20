@@ -52,6 +52,19 @@ impl ViewMetadata {
             ViewMetadata::V1(metadata) => metadata.current_version_id,
         }
     }
+    /// Get the last_sequence_number of the table
+    pub fn representation(&self) -> &Representation {
+        match self {
+            ViewMetadata::V1(metadata) => {
+                &metadata
+                    .versions
+                    .iter()
+                    .find(|version| version.version_id == metadata.current_version_id)
+                    .unwrap()
+                    .representations[0]
+            }
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
