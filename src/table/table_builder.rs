@@ -53,7 +53,7 @@ impl TableBuilder {
         let metadata = TableMetadataV2 {
             table_uuid: Uuid::new_v4(),
             location: location.to_string(),
-            last_sequence_number: 0,
+            last_sequence_number: 1,
             last_updated_ms: SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .map_err(|err| anyhow!(err.to_string()))?
@@ -105,7 +105,7 @@ impl TableBuilder {
         let metadata = TableMetadataV2 {
             table_uuid: Uuid::new_v4(),
             location: location.to_string(),
-            last_sequence_number: 0,
+            last_sequence_number: 1,
             last_updated_ms: SystemTime::now()
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .map_err(|err| anyhow!(err.to_string()))?

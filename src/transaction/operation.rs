@@ -305,7 +305,7 @@ mod tests {
                 .unwrap();
 
         let metadata_location = table.metadata_location();
-        assert_eq!(metadata_location, "test/append/metadata/v0.metadata.json");
+        assert_eq!(metadata_location, "test/append/metadata/v1.metadata.json");
 
         let transaction = table.new_transaction();
         transaction
@@ -317,6 +317,6 @@ mod tests {
             .await
             .unwrap();
         let metadata_location = table.metadata_location();
-        assert_eq!(metadata_location, "test/append/metadata/v1.metadata.json");
+        assert_eq!(metadata_location, "test/append/metadata/v2.metadata.json");
     }
 }
