@@ -28,6 +28,7 @@ use url::Url;
 use crate::{
     datafusion::pruning_statistics::{PruneDataFiles, PruneManifests},
     table::Table,
+    util,
 };
 
 use self::schema::iceberg_to_arrow_schema;
@@ -82,7 +83,8 @@ impl TableProvider for DataFusionTable {
 
         // Create a unique URI for this particular object store
         let object_store_url = ObjectStoreUrl::parse(
-            "iceberg://".to_owned() + &self.metadata().location().replace('/', "-"),
+            "iceberg://".to_owned()
+                + &util::strip_prefix(&self.metadata().location()).replace('/', "-"),
         )?;
         let url: &Url = object_store_url.as_ref();
         session.runtime_env.register_object_store(
@@ -120,7 +122,7 @@ impl TableProvider for DataFusionTable {
                             })
                             .collect::<Vec<ScalarValue>>();
                         let object_meta = ObjectMeta {
-                            location: manifest.file_path().into(),
+                            location: util::strip_prefix(manifest.file_path()).into(),
                             size: manifest.file_size_in_bytes() as usize,
                             last_modified: {
                                 let last_updated_ms = self.metadata().last_updated_ms();
@@ -156,7 +158,7 @@ impl TableProvider for DataFusionTable {
                     })
                     .collect::<Vec<ScalarValue>>();
                 let object_meta = ObjectMeta {
-                    location: manifest.file_path().into(),
+                    location: util::strip_prefix(manifest.file_path()).into(),
                     size: manifest.file_size_in_bytes() as usize,
                     last_modified: {
                         let last_updated_ms = self.metadata().last_updated_ms();

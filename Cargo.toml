@@ -29,7 +29,7 @@ serde_bytes = "0.11.7"
 anyhow = "1.0"
 async-trait = "0.1.57"
 itertools = "0.10.3"
-object_store = "0.5.0"
+object_store = { version = "0.5.0", features = ["aws", "gcp"] }
 futures = "0.3.24"
 getrandom = "0.2.7"
 datafusion = { version = "12.0.0", optional = true }

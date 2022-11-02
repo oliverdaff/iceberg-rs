@@ -21,6 +21,7 @@ pub mod catalog;
 pub mod model;
 pub mod table;
 pub mod transaction;
+mod util;
 
 pub use object_store;
 

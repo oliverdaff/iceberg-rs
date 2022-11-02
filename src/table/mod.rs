@@ -18,6 +18,7 @@ use crate::{
         table_metadata::{FormatVersion, TableMetadata},
     },
     transaction::Transaction,
+    util,
 };
 
 pub mod files;
@@ -287,7 +288,7 @@ pub(crate) async fn get_manifests(
         Some(manifest_list) => {
             let bytes: Cursor<Vec<u8>> = Cursor::new(
                 object_store
-                    .get(&manifest_list.into())
+                    .get(&util::strip_prefix(&manifest_list).into())
                     .await
                     .map_err(anyhow::Error::msg)?
                     .bytes()

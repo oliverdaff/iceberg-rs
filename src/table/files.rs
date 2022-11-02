@@ -8,10 +8,13 @@ use apache_avro::types::Value as AvroValue;
 use futures::{stream, StreamExt, TryFutureExt, TryStreamExt};
 use object_store::path::Path;
 
-use crate::model::{
-    manifest::{ManifestEntry, ManifestEntryV1, ManifestEntryV2},
-    manifest_list::ManifestFile,
-    table_metadata::FormatVersion,
+use crate::{
+    model::{
+        manifest::{ManifestEntry, ManifestEntryV1, ManifestEntryV2},
+        manifest_list::ManifestFile,
+        table_metadata::FormatVersion,
+    },
+    util,
 };
 
 use super::Table;
@@ -42,7 +45,7 @@ impl Table {
         stream::iter(iter)
             .map(|file| async move {
                 let object_store = Arc::clone(&self.object_store());
-                let path: Path = file.manifest_path().into();
+                let path: Path = util::strip_prefix(file.manifest_path()).into();
                 let bytes = Cursor::new(Vec::from(
                     object_store
                         .get(&path)
