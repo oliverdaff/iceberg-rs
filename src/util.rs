@@ -4,7 +4,7 @@ use regex::Regex;
 lazy_static! {
     static ref S3A: Regex = Regex::new("s3a://\\w*/").unwrap();
     static ref S3: Regex = Regex::new("s3://\\w*/").unwrap();
-    static ref GS: Regex = Regex::new("s3://\\w*/").unwrap();
+    static ref GS: Regex = Regex::new("gs://\\w*/").unwrap();
 }
 
 pub fn strip_prefix(path: &str) -> String {
