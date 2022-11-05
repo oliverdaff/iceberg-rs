@@ -1,20 +1,21 @@
-use lazy_static::lazy_static;
-use regex::Regex;
-
-lazy_static! {
-    static ref S3A: Regex = Regex::new("s3a://\\w*/").unwrap();
-    static ref S3: Regex = Regex::new("s3://\\w*/").unwrap();
-    static ref GS: Regex = Regex::new("gs://\\w*/").unwrap();
-}
+use url::Url;
 
 pub fn strip_prefix(path: &str) -> String {
-    if path.starts_with("s3a://") {
-        S3A.replace(path, "").to_string()
-    } else if path.starts_with("s3://") {
-        S3.replace(path, "").to_string()
-    } else if path.starts_with("gs://") {
-        GS.replace(path, "").to_string()
-    } else {
-        path.to_owned()
+    match Url::parse(path) {
+        Ok(url) => String::from(url.path()),
+        Err(_) => String::from(path),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::util::strip_prefix;
+    #[test]
+    fn strip_prefix_behaves_as_expected() {
+        assert_eq!(strip_prefix("/a/b"), "/a/b");
+        assert_eq!(strip_prefix("file:///a/b"), "/a/b");
+        assert_eq!(strip_prefix("s3://bucket/a/b"), "/a/b");
+        assert_eq!(strip_prefix("gs://bucket/a/b"), "/a/b");
+        assert_eq!(strip_prefix("az://bucket/a/b"), "/a/b");
     }
 }
