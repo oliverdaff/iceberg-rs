@@ -4,11 +4,11 @@
 
 use anyhow::{anyhow, Result};
 
-use std::collections::HashMap;
+use std::{collections::HashMap, convert::TryInto};
 
 use datafusion::arrow::datatypes::{DataType, Field, Schema as ArrowSchema, TimeUnit};
 
-use crate::model::schema::{AllType, PrimitiveType, SchemaStruct};
+use crate::model::schema::{AllType, PrimitiveType, SchemaStruct, StructField};
 
 pub fn iceberg_to_arrow_schema(schema: &SchemaStruct) -> Result<ArrowSchema> {
     let fields = schema
@@ -26,6 +26,30 @@ pub fn iceberg_to_arrow_schema(schema: &SchemaStruct) -> Result<ArrowSchema> {
         .collect::<Result<_, anyhow::Error>>()?;
     let metadata = HashMap::new();
     Ok(ArrowSchema { fields, metadata })
+}
+
+impl TryFrom<&ArrowSchema> for SchemaStruct {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &ArrowSchema) -> Result<Self, Self::Error> {
+        let fields = value
+            .fields
+            .iter()
+            .map(|field| {
+                Ok(StructField {
+                    id: field
+                        .dict_id()
+                        .ok_or_else(|| anyhow!("Schema field is missing id."))?
+                        as i32,
+                    name: field.name().to_owned(),
+                    required: !field.is_nullable(),
+                    field_type: field.data_type().try_into()?,
+                    doc: None,
+                })
+            })
+            .collect::<Result<_, anyhow::Error>>()?;
+        Ok(SchemaStruct { fields })
+    }
 }
 
 impl TryFrom<&AllType> for DataType {
