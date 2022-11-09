@@ -23,7 +23,7 @@ pub trait Catalog: Send + Sync {
     /// Lists all tables in the given namespace.
     async fn list_tables(&self, namespace: &Namespace) -> Result<Vec<TableIdentifier>>;
     /// Lists all namespaces in the catalog.
-    async fn list_namespaces(&self) -> Result<Vec<Namespace>>;
+    async fn list_namespaces(&self, parent: Option<&str>) -> Result<Vec<Namespace>>;
     /// Create a table from an identifier and a schema
     async fn create_table(
         self: Arc<Self>,
