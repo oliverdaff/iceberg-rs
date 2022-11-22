@@ -4,14 +4,15 @@ The main struct here is [TableMetadataV2] which defines the data for a table.
 */
 use std::collections::HashMap;
 
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
 use crate::model::{
     partition::PartitionSpec,
     schema,
     snapshot::{Reference, SnapshotV2},
     sort,
 };
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "format-version")]
@@ -158,7 +159,7 @@ mod tests {
                 "default-sort-order-id": 0
             }
         "#;
-        let metadata = serde_json::from_str::<TableMetadataV2>(&data)?;
+        let metadata = serde_json::from_str::<TableMetadataV2>(data)?;
         //test serialise deserialise works.
         let metadata_two: TableMetadataV2 =
             serde_json::from_str(&serde_json::to_string(&metadata)?)?;
@@ -175,7 +176,7 @@ mod tests {
                 "table-uuid": "xxxx"
             }
         "#;
-        assert!(serde_json::from_str::<TableMetadataV2>(&data).is_err());
+        assert!(serde_json::from_str::<TableMetadataV2>(data).is_err());
         Ok(())
     }
     #[test]
@@ -185,7 +186,7 @@ mod tests {
                 "format-version" : 1
             }
         "#;
-        assert!(serde_json::from_str::<TableMetadataV2>(&data).is_err());
+        assert!(serde_json::from_str::<TableMetadataV2>(data).is_err());
         Ok(())
     }
 }

@@ -119,7 +119,7 @@ mod tests {
             } 
         "#;
 
-        let snapshot: SnapshotV2 = serde_json::from_str(&data).unwrap();
+        let snapshot: SnapshotV2 = serde_json::from_str(data).unwrap();
         assert_eq!(Some(Operation::Append), snapshot.summary.operation);
         assert!(snapshot.summary.other.is_empty());
     }

@@ -73,7 +73,7 @@ mod tests {
             } 
         "#;
 
-        let field: SortField = serde_json::from_str(&data).unwrap();
+        let field: SortField = serde_json::from_str(data).unwrap();
         assert_eq!(3, field.source_id);
         assert_eq!(Transform::Bucket(4), field.transform);
         assert_eq!(SortDirection::Descending, field.direction);
@@ -95,7 +95,7 @@ mod tests {
             } 
         "#;
 
-        let field: SortOrder = serde_json::from_str(&data).unwrap();
+        let field: SortOrder = serde_json::from_str(data).unwrap();
         assert_eq!(1, field.order_id);
         assert_eq!(1, field.fields.len());
     }

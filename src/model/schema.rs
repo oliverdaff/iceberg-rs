@@ -270,7 +270,7 @@ mod tests {
             "fields": []
         }
         "#;
-        assert!(serde_json::from_str::<Struct>(&data).is_ok());
+        assert!(serde_json::from_str::<Struct>(data).is_ok());
         let data = r#"
         {
             "type" : "anyother"            
