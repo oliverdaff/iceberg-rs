@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 pub mod operation;
 
-use crate::{catalog::TableLike, model::schema::Schema};
+use crate::{catalog::Relation, model::schema::Schema};
 
 use self::operation::Operation as ViewOperation;
 
@@ -77,7 +77,7 @@ impl<'view> Transaction<'view> {
                     .await
                     .map_err(|err| anyhow!(err.to_string()))?;
                 let previous_metadata_file_location = view.metadata_location();
-                if let TableLike::View(new_view) = catalog
+                if let Relation::View(new_view) = catalog
                     .clone()
                     .update_table(
                         identifier.clone(),

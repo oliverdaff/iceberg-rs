@@ -10,7 +10,7 @@ use object_store::ObjectStore;
 use uuid::Uuid;
 
 use crate::catalog::identifier::Identifier;
-use crate::catalog::TableLike;
+use crate::catalog::Relation;
 use crate::model::schema::Schema;
 use crate::model::schema::SchemaV2;
 use crate::model::view_metadata::{
@@ -150,7 +150,7 @@ impl ViewBuilder {
                     .put(&path, metadata_json.into())
                     .await
                     .map_err(|err| anyhow!(err.to_string()))?;
-                if let TableLike::View(view) =
+                if let Relation::View(view) =
                     catalog.register_table(identifier, path.as_ref()).await?
                 {
                     Ok(view)

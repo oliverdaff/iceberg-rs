@@ -19,7 +19,7 @@ use object_store::ObjectStore;
 use self::namespace::Namespace;
 
 /// Enum for different types that can be queried like a table, for example view
-pub enum TableLike {
+pub enum Relation {
     /// An iceberg table
     Table(Table),
     /// An iceberg view
@@ -38,13 +38,13 @@ pub trait Catalog: Send + Sync {
         self: Arc<Self>,
         identifier: Identifier,
         schema: SchemaV2,
-    ) -> Result<TableLike>;
+    ) -> Result<Relation>;
     /// Check if a table exists
     async fn table_exists(&self, identifier: &Identifier) -> Result<bool>;
     /// Drop a table and delete all data and metadata files.
     async fn drop_table(&self, identifier: &Identifier) -> Result<()>;
     /// Load a table.
-    async fn load_table(self: Arc<Self>, identifier: Identifier) -> Result<TableLike>;
+    async fn load_table(self: Arc<Self>, identifier: Identifier) -> Result<Relation>;
     /// Invalidate cached table metadata from current catalog.
     async fn invalidate_table(&self, identifier: &Identifier) -> Result<()>;
     /// Register a table with the catalog if it doesn't exist.
@@ -52,14 +52,14 @@ pub trait Catalog: Send + Sync {
         self: Arc<Self>,
         identifier: Identifier,
         metadata_file_location: &str,
-    ) -> Result<TableLike>;
+    ) -> Result<Relation>;
     /// Update a table by atomically changing the pointer to the metadata file
     async fn update_table(
         self: Arc<Self>,
         identifier: Identifier,
         metadata_file_location: &str,
         previous_metadata_file_location: &str,
-    ) -> Result<TableLike>;
+    ) -> Result<Relation>;
     /// Instantiate a builder to either create a table or start a create/replace transaction.
     async fn build_table(
         self: Arc<Self>,

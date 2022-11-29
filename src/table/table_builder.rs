@@ -10,7 +10,7 @@ use object_store::ObjectStore;
 use uuid::Uuid;
 
 use crate::catalog::identifier::Identifier;
-use crate::catalog::TableLike;
+use crate::catalog::Relation;
 use crate::model::partition::{PartitionField, Transform};
 use crate::model::sort::{NullOrder, SortDirection, SortField, SortOrder};
 use crate::model::{partition::PartitionSpec, schema::SchemaV2, table_metadata::TableMetadataV2};
@@ -152,7 +152,7 @@ impl TableBuilder {
                     .put(&path, metadata_json.into())
                     .await
                     .map_err(|err| anyhow!(err.to_string()))?;
-                if let TableLike::Table(table) =
+                if let Relation::Table(table) =
                     catalog.register_table(identifier, path.as_ref()).await?
                 {
                     Ok(table)

@@ -6,7 +6,7 @@ use futures::StreamExt;
 use object_store::path::Path;
 use uuid::Uuid;
 
-use crate::{catalog::TableLike, model::schema::SchemaV2, table::Table};
+use crate::{catalog::Relation, model::schema::SchemaV2, table::Table};
 use anyhow::{anyhow, Result};
 
 use self::operation::Operation;
@@ -80,7 +80,7 @@ impl<'table> TableTransaction<'table> {
                     .await
                     .map_err(|err| anyhow!(err.to_string()))?;
                 let previous_metadata_file_location = table.metadata_location();
-                if let TableLike::Table(new_table) = catalog
+                if let Relation::Table(new_table) = catalog
                     .clone()
                     .update_table(
                         identifier.clone(),
