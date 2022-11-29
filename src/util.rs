@@ -1,5 +1,9 @@
+/*!
+This module provides utility functions.
+*/
 use url::Url;
 
+/// Strip prefix from a path
 pub fn strip_prefix(path: &str) -> String {
     match Url::parse(path) {
         Ok(url) => String::from(url.path()),
