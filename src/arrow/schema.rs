@@ -6,10 +6,11 @@ use anyhow::{anyhow, Result};
 
 use std::{collections::HashMap, convert::TryInto};
 
-use datafusion::arrow::datatypes::{DataType, Field, Schema as ArrowSchema, TimeUnit};
+use arrow::datatypes::{DataType, Field, Schema as ArrowSchema, TimeUnit};
 
 use crate::model::schema::{AllType, PrimitiveType, SchemaStruct, StructField};
 
+/// Convert iceberg schema into arrow schema
 pub fn iceberg_to_arrow_schema(schema: &SchemaStruct) -> Result<ArrowSchema> {
     let fields = schema
         .fields

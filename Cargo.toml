@@ -12,9 +12,6 @@ categories = ["database", "filesystem"]
 include = ["src/**/*.rs", "crates-io.md", "README.md", "LICENSE-APACHE", "LICENSE-MIT"]
 readme = "crates-io.md"
 
-[features]
-datafusion-ext = ["datafusion"]
-
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -33,7 +30,7 @@ object_store = { version = "0.5.0", features = ["aws", "gcp"] }
 futures = "0.3.24"
 getrandom = "0.2.7"
 url = "2.3.1"
-datafusion = { version = "12.0.0", optional = true }
+arrow = "22.0.0"
 
 
 [dev-dependencies]

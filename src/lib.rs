@@ -17,6 +17,7 @@ Coming soon:
 * Validation.
 
 */
+pub mod arrow;
 pub mod catalog;
 pub mod model;
 pub mod table;
@@ -24,6 +25,3 @@ pub mod transaction;
 pub mod util;
 
 pub use object_store;
-
-#[cfg(feature = "datafusion-ext")]
-pub mod datafusion;
