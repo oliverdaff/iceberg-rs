@@ -17,12 +17,13 @@ use crate::{
         snapshot::{SnapshotV1, SnapshotV2, Summary},
         table_metadata::{FormatVersion, TableMetadata},
     },
-    transaction::Transaction,
+    table::transaction::Transaction,
     util,
 };
 
 pub mod files;
 pub mod table_builder;
+pub mod transaction;
 
 /// Tables can be either one of following types:
 /// - FileSystem(https://iceberg.apache.org/spec/#file-system-tables)
