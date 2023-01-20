@@ -17,4 +17,5 @@ Coming soon:
 * Validation.
 
 */
+pub mod error;
 pub mod model;

@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 /// The type of operations included in the snapshot, this allows
 /// certain snapshots to be skipped during operation.
@@ -30,7 +30,7 @@ pub enum Operation {
     Delete,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 /// Summarises the changes in the snapshot.
 pub struct Summary {
     /// The type of operation in the snapshot
@@ -40,7 +40,35 @@ pub struct Summary {
     pub other: HashMap<String, String>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+/// A v1 compliant snapshot.
+pub struct SnapshotV1 {
+    /// A unique long ID
+    pub snapshot_id: i64,
+    /// The snapshot ID of the snapshot’s parent.
+    /// Omitted for any snapshot with no parent
+    pub parent_snapshot_id: Option<i64>,
+    /// A timestamp when the snapshot was created, used for garbage
+    /// collection and table inspection
+    pub timestamp_ms: i64,
+    /// The location of a manifest list for this snapshot that
+    /// tracks manifest files with additional metadata.
+    /// # Note
+    /// this is optional in the v1 spec, but required in the v2 spec.
+    /// for convenience we make it required
+    pub manifest_list: String,
+    /// A list of manifest file locations
+    /// # Note
+    /// this should be emmited when `manifest_list` presents
+    pub manifests: Option<Vec<String>>,
+    /// A string map that summarizes the snapshot changes, including operation.
+    pub summary: Option<Summary>,
+    /// ID of the table’s current schema when the snapshot was created.
+    pub schema_id: Option<i64>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 /// A V2 compliant snapshot.
 pub struct SnapshotV2 {
@@ -64,7 +92,41 @@ pub struct SnapshotV2 {
     pub schema_id: Option<i64>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+impl From<SnapshotV1> for SnapshotV2 {
+    fn from(value: SnapshotV1) -> Self {
+        Self {
+            snapshot_id: value.snapshot_id,
+            parent_snapshot_id: value.parent_snapshot_id,
+            timestamp_ms: value.timestamp_ms,
+            manifest_list: value.manifest_list,
+            summary: value.summary.unwrap_or(Summary {
+                operation: None,
+                other: HashMap::new(),
+            }),
+            schema_id: value.schema_id,
+            sequence_number: 0,
+        }
+    }
+}
+
+impl From<&SnapshotV1> for SnapshotV2 {
+    fn from(value: &SnapshotV1) -> Self {
+        Self {
+            snapshot_id: value.snapshot_id,
+            parent_snapshot_id: value.parent_snapshot_id,
+            timestamp_ms: value.timestamp_ms,
+            manifest_list: value.manifest_list.clone(),
+            summary: value.summary.clone().unwrap_or(Summary {
+                operation: None,
+                other: HashMap::new(),
+            }),
+            schema_id: value.schema_id,
+            sequence_number: 0,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "kebab-case")]
 /// Iceberg tables keep track of branches and tags using snapshot references.
 pub struct Reference {
@@ -75,7 +137,7 @@ pub struct Reference {
     pub retention: Retention,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "lowercase", tag = "type")]
 /// Retention policy field, which differ based on it it
 /// is a Branch or Tag Reference

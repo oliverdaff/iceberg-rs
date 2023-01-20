@@ -96,7 +96,7 @@ where
         static ref RE: Regex = Regex::new(r#"^decimal\((?P<p>\d+),(?P<s>\d+)\)$"#).unwrap();
     }
 
-    let err_msg = format!("Invalid decimal format {}", this);
+    let err_msg = format!("Invalid decimal format {this}");
 
     let caps = RE
         .captures(&this)
@@ -130,7 +130,7 @@ where
         static ref RE: Regex = Regex::new(r#"^fixed\[(?P<l>\d+)\]$"#).unwrap();
     }
 
-    let err_msg = format!("Invalid fixed format {}", this);
+    let err_msg = format!("Invalid fixed format {this}");
 
     let caps = RE
         .captures(&this)
@@ -146,7 +146,7 @@ where
     Ok(PrimitiveType::Fixed(length))
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(untagged)]
 /// A union type of all allowed Schema types.
 pub enum AllType {
@@ -160,7 +160,7 @@ pub enum AllType {
     Map(Map),
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type")]
 /// A struct is a tuple of typed values. Each field in the tuple is
 /// named and has an integer id that is unique in the table schema.
@@ -172,7 +172,7 @@ pub struct Struct {
     pub fields: Vec<StructField>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 /// Details of a struct in a field.
 pub struct StructField {
     /// Unique Id
@@ -182,14 +182,32 @@ pub struct StructField {
     /// Optional or required, meaning that values can (or can not be null)
     pub required: bool,
     /// Field can have any type
+    #[serde(alias = "type")]
     pub field_type: AllType,
     /// Fields can have any optional comment or doc string.
     pub doc: Option<String>,
 }
-
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 /// Names and types of fields in a table.
+/// for version 1
+pub struct SchemaV1 {
+    /// Identifier of the schema
+    pub schema_id: Option<i32>,
+    /// Set of primitive fields that identify rows in a table.
+    pub identifier_field_ids: Option<Vec<i32>>,
+    /// Name Mapping
+    pub name_mapping: Option<NameMappings>,
+
+    #[serde(flatten)]
+    /// The struct fields
+    pub struct_fields: Struct,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+/// Names and types of fields in a table.
+/// for version 2
 pub struct SchemaV2 {
     /// Identifier of the schema
     pub schema_id: i32,
@@ -204,7 +222,29 @@ pub struct SchemaV2 {
     pub struct_fields: Struct,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+impl From<SchemaV1> for SchemaV2 {
+    fn from(value: SchemaV1) -> Self {
+        Self {
+            schema_id: value.schema_id.unwrap_or(0),
+            identifier_field_ids: value.identifier_field_ids,
+            name_mapping: value.name_mapping,
+            struct_fields: value.struct_fields,
+        }
+    }
+}
+
+impl From<&SchemaV1> for SchemaV2 {
+    fn from(value: &SchemaV1) -> Self {
+        Self {
+            schema_id: value.schema_id.unwrap_or(0),
+            identifier_field_ids: value.identifier_field_ids.clone(),
+            name_mapping: value.name_mapping.clone(),
+            struct_fields: value.struct_fields.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "kebab-case", tag = "list")]
 /// A Schema type that contains List  elements.
 pub struct List {
@@ -218,7 +258,7 @@ pub struct List {
     pub element: Box<AllType>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "kebab-case", tag = "type")]
 /// A Schema type that contains Map elements.
 /// A map is a collection of key-value pairs with a key type and a value type.
@@ -239,7 +279,7 @@ pub struct Map {
     pub value: Box<AllType>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 /// Tables may also define a property schema.name-mapping.default with a JSON name mapping containing a list of field mapping objects.
 /// These mappings provide fallback field ids to be used when a data file does not contain field id information.
 pub struct NameMappings {
@@ -247,7 +287,7 @@ pub struct NameMappings {
     pub default: Vec<NameMapping>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "kebab-case")]
 /// Individual mapping within NameMappings.
 pub struct NameMapping {
