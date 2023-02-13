@@ -13,9 +13,7 @@ Currently supported:
 Coming soon:
 * Manifest files.
 * Manifest lists.
-* v1 table metadata support.
 * Validation.
 
 */
-pub mod error;
 pub mod model;

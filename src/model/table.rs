@@ -4,8 +4,7 @@ The main struct here is [TableMetadataV2] which defines the data for a table.
 */
 use std::collections::HashMap;
 
-use anyhow::anyhow;
-use serde::{Deserialize, Serialize};
+use serde::{de::Unexpected, Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::snapshot::SnapshotV1;
@@ -17,7 +16,6 @@ use crate::model::{
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
 /// generic table metadata
 pub enum TableMetadata {
     /// version 1 of the table metadata
@@ -32,49 +30,55 @@ impl Serialize for TableMetadata {
         S: serde::Serializer,
     {
         #[derive(Serialize)]
-        struct TypedTableMetadata {
+        #[serde(untagged)]
+        enum TblMeta<'a> {
+            V1(&'a TableMetadataV1),
+            V2(&'a TableMetadataV2),
+        }
+        #[derive(Serialize)]
+        #[serde(rename_all = "kebab-case")]
+        struct TypedTableMetadata<'a> {
             format_version: usize,
             #[serde(flatten)]
-            meta: TableMetadata,
+            meta: TblMeta<'a>,
         }
         let meta = TypedTableMetadata {
             format_version: self.format_version(),
-            meta: self.clone(),
+            meta: match self {
+                TableMetadata::V1(v) => TblMeta::V1(v),
+                TableMetadata::V2(v) => TblMeta::V2(v),
+            },
         };
 
         meta.serialize(serializer)
     }
 }
 
-impl Deserialize for TableMetadata {
+impl<'de> Deserialize<'de> for TableMetadata {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'_>,
+        D: serde::Deserializer<'de>,
     {
+        use serde::de::Error as RawError;
         use serde_json::Value;
+
         let v = Value::deserialize(deserializer)?;
         match v
             .get("format-version")
             .and_then(Value::as_u64)
-            .ok_or(anyhow!("expected integer field: \"format-version\""))?
+            .ok_or(RawError::missing_field("format-version"))?
         {
             1 => TableMetadataV1::deserialize(v)
                 .map(TableMetadata::V1)
-                .map_err(|e| anyhow!("parse error: {}", e)),
+                .map_err(RawError::custom),
             2 => TableMetadataV2::deserialize(v)
                 .map(TableMetadata::V2)
-                .map_err(|e| anyhow!("parse error: {}", e)),
-            v => anyhow!("unsupported format version: {}", e),
+                .map_err(RawError::custom),
+            v => Err(RawError::invalid_value(
+                Unexpected::Unsigned(v),
+                &"only support format-version 1 or 2",
+            )),
         }
-    }
-
-    fn deserialize_in_place<D>(deserializer: D, place: &mut Self) -> Result<(), D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        // Default implementation just delegates to `deserialize` impl.
-        *place = try!(Deserialize::deserialize(deserializer));
-        Ok(())
     }
 }
 
@@ -96,8 +100,8 @@ impl TableMetadata {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case", tag = "format-version")]
-/// Fields for the version 2 of the table metadata.
+#[serde(rename_all = "kebab-case")]
+/// Fields for the version 1 of the table metadata.
 pub struct TableMetadataV1 {
     /// Integer Version for the format.
     /// A UUID that identifies the table
@@ -118,7 +122,10 @@ pub struct TableMetadataV1 {
     /// ID of the table’s current schema.
     pub current_schema_id: Option<i32>,
     /// single record of partition spec
-    pub partition_spec: PartitionSpec,
+    /// # Note:
+    /// This is not used for reading, but used for writes
+    #[serde(rename(serialize = "partition-spec"))]
+    pub partition_spec_w: Option<PartitionSpec>,
     /// A list of partition specs, stored as full partition spec objects.
     pub partition_specs: Option<Vec<PartitionSpec>>,
     /// ID of the “current” spec that writers should use by default.
@@ -162,7 +169,7 @@ pub struct TableMetadataV1 {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case", tag = "format-version")]
+#[serde(rename_all = "kebab-case")]
 /// Fields for the version 2 of the table metadata.
 pub struct TableMetadataV2 {
     /// Integer Version for the format.
@@ -246,7 +253,7 @@ impl From<TableMetadataV1> for TableMetadataV2 {
             {
                 (default_spec_id, partition_specs)
             } else {
-                (0, vec![value.partition_spec])
+                (0, vec![value.partition_spec_w.unwrap_or_default()])
             };
 
         let (default_sort_order_id, sort_orders) =
@@ -301,7 +308,7 @@ impl From<&TableMetadataV1> for TableMetadataV2 {
             {
                 (default_spec_id, partition_specs.clone())
             } else {
-                (0, vec![value.partition_spec.clone()])
+                (0, vec![value.partition_spec_w.clone().unwrap_or_default()])
             };
         let (default_sort_order_id, sort_orders) =
             if let (Some(default_sort_order_id), Some(sort_orders)) =
@@ -359,11 +366,12 @@ pub struct SnapshotLog {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use anyhow::Result;
+    use uuid::Uuid;
 
     use crate::model::table::TableMetadata;
-
-    use super::TableMetadataV2;
 
     #[test]
     fn test_deserialize_table_data_v2() -> Result<()> {
@@ -419,8 +427,9 @@ mod tests {
             }
         "#;
         let metadata = serde_json::from_str::<TableMetadata>(data)?;
-        //test serialise deserialise works.
-        let metadata_two: TableMetadata = serde_json::from_str(&serde_json::to_string(&metadata)?)?;
+        let serialized = serde_json::to_string(&metadata)?;
+        // test serialise deserialise works.
+        let metadata_two: TableMetadata = serde_json::from_str(&serialized)?;
         assert_eq!(metadata, metadata_two);
 
         Ok(())
@@ -502,6 +511,13 @@ mod tests {
 }
     "#;
         let table_meta = serde_json::from_str::<TableMetadata>(data)?;
+        let v2_meta = table_meta.to_latest();
+        let serialized = serde_json::to_string(&TableMetadata::V2(v2_meta))?;
+        let TableMetadata::V2(meta) = serde_json::from_str::<TableMetadata>(&serialized)? else {panic!("must be v2!")};
+        assert_eq!(
+            meta.table_uuid,
+            Uuid::from_str("bf530b84-8e0a-4949-b2c4-b50f02a1334f").expect("must success")
+        );
         Ok(())
     }
 }

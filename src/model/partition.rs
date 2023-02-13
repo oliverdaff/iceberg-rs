@@ -137,6 +137,15 @@ pub struct PartitionSpec {
     pub fields: Vec<PartitionField>,
 }
 
+impl Default for PartitionSpec {
+    fn default() -> Self {
+        Self {
+            spec_id: 0,
+            fields: vec![],
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
