@@ -130,6 +130,7 @@ pub struct PartitionField {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 /// A definition of how partition values are derived from data fields.
+#[derive(Default)]
 pub struct PartitionSpec {
     /// Identifier for the specification
     pub spec_id: i32,
@@ -137,14 +138,7 @@ pub struct PartitionSpec {
     pub fields: Vec<PartitionField>,
 }
 
-impl Default for PartitionSpec {
-    fn default() -> Self {
-        Self {
-            spec_id: 0,
-            fields: vec![],
-        }
-    }
-}
+
 
 #[cfg(test)]
 mod tests {
