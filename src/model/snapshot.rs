@@ -137,6 +137,16 @@ pub struct Reference {
     pub retention: Retention,
 }
 
+/// default value for the min snapshots to keep
+const fn min_snapshots_to_keep_default() -> i32 {
+    1
+}
+
+/// default value for the max snapshot age ms
+const fn max_snapshot_age_ms_default() -> i64 {
+    432000000
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "lowercase", tag = "type")]
 /// Retention policy field, which differ based on it it
@@ -147,13 +157,17 @@ pub enum Retention {
     Branch {
         /// A positive number for the minimum number of snapshots to keep in a
         /// branch while expiring snapshots.
+        #[serde(default = "min_snapshots_to_keep_default")]
         min_snapshots_to_keep: i32,
         /// A positive number for the max age of snapshots to keep when expiring,
         /// including the latest snapshot.
+        #[serde(default = "max_snapshot_age_ms_default")]
         max_snapshot_age_ms: i64,
         /// A positive number for the max age of the snapshot reference to
         /// keep while expiring snapshots.
-        max_ref_age_ms: i64,
+        /// NOTE:
+        /// could be None for `main` branch
+        max_ref_age_ms: Option<i64>,
     },
     #[serde(rename_all = "kebab-case")]
     /// A tag reference.
@@ -219,7 +233,7 @@ mod tests {
         let retention = Retention::Branch {
             min_snapshots_to_keep: 1,
             max_snapshot_age_ms: 1,
-            max_ref_age_ms: 1,
+            max_ref_age_ms: Some(1),
         };
         let json = serde_json::to_string(&retention).unwrap();
         let result: Retention = serde_json::from_str(&json).unwrap();
