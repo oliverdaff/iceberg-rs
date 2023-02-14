@@ -1,6 +1,6 @@
 [package]
 name = "iceberg-rs"
-version = "0.1.1-beta.0"
+version = "0.1.2"
 authors = ["Oliver Daff <oliverdaff@gmail.com>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -9,17 +9,25 @@ homepage = "https://github.com/oliverdaff/iceberg-rs"
 repository = "https://github.com/oliverdaff/iceberg-rs"
 keywords = ["iceberg", "analytics", "data"]
 categories = ["database", "filesystem"]
-include = ["src/**/*.rs", "crates-io.md", "README.md", "LICENSE-APACHE", "LICENSE-MIT"]
+include = [
+    "src/**/*.rs",
+    "crates-io.md",
+    "README.md",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+]
 readme = "crates-io.md"
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-uuid = { version = "0.8", features = ["serde", "v4"] }
-regex = "1.5.5"
+serde = { version = "1.0.144", features = ["derive"] }
+serde_json = "1.0.60"
+serde_derive = "1.0.144"
+uuid = { version = "1.2", features = ["serde", "v4"] }
+regex = "1.7"
 lazy_static = "1.4.0"
+anyhow = "1.0.40"
+thiserror = "1.0.30"
 
 
 [dev-dependencies]
-anyhow = "1.0"
 proptest = "1.0"

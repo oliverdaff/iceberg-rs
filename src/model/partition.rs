@@ -72,7 +72,7 @@ where
     lazy_static! {
         static ref RE: Regex = Regex::new(r#"^bucket\[(?P<n>\d+)\]$"#).unwrap();
     }
-    let err_msg = format!("Invalid bucket format {}", this);
+    let err_msg = format!("Invalid bucket format {this}");
 
     let caps = RE
         .captures(&this)
@@ -96,7 +96,7 @@ where
     lazy_static! {
         static ref RE: Regex = Regex::new(r#"^truncate\[(?P<w>\d+)\]$"#).unwrap();
     }
-    let err_msg = format!("Invalid truncate format {}", this);
+    let err_msg = format!("Invalid truncate format {this}");
 
     let caps = RE
         .captures(&this)
@@ -112,7 +112,7 @@ where
     Ok(Transform::Truncate(width))
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 /// Tables are configured with a partition spec that defines how to produce a tuple of partition values from a record.
 pub struct PartitionField {
@@ -127,15 +127,18 @@ pub struct PartitionField {
     pub transform: Transform,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 /// A definition of how partition values are derived from data fields.
+#[derive(Default)]
 pub struct PartitionSpec {
     /// Identifier for the specification
     pub spec_id: i32,
     /// Fields for the specification
     pub fields: Vec<PartitionField>,
 }
+
+
 
 #[cfg(test)]
 mod tests {

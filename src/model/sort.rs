@@ -44,7 +44,7 @@ pub struct SortField {
     pub null_order: NullOrder,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 /// A sort order is defined by an sort order id and a list of sort fields.
 /// The order of the sort fields within the list defines the order in
@@ -73,7 +73,7 @@ mod tests {
             } 
         "#;
 
-        let field: SortField = serde_json::from_str(&data).unwrap();
+        let field: SortField = serde_json::from_str(data).unwrap();
         assert_eq!(3, field.source_id);
         assert_eq!(Transform::Bucket(4), field.transform);
         assert_eq!(SortDirection::Descending, field.direction);
@@ -95,7 +95,7 @@ mod tests {
             } 
         "#;
 
-        let field: SortOrder = serde_json::from_str(&data).unwrap();
+        let field: SortOrder = serde_json::from_str(data).unwrap();
         assert_eq!(1, field.order_id);
         assert_eq!(1, field.fields.len());
     }
@@ -164,9 +164,5 @@ mod tests {
        fn prop_test_sort_order(a in arb_sort_order()) {
            assert_eq!(a, serde_json::from_str(&serde_json::to_string(&a).unwrap()).unwrap())
        }
-
-
-
-
     }
 }
