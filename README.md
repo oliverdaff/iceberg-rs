@@ -1,6 +1,26 @@
-# Iceberg-rs
+# iceberg-rs
 
- **A Rust implementation of Iceberg.**
+> ⚠️ **DEPRECATED**: This crate is no longer maintained. Please use the official [Apache Iceberg Rust implementation](https://crates.io/crates/iceberg) instead.
+
+---
+
+This repository previously contained a Rust implementation of the Apache Iceberg table format.
+
+We recommend migrating to the official crate:
+
+- 📦 Crate: [`iceberg`](https://crates.io/crates/iceberg)
+- 🔗 Repository: [apache/iceberg-rust](https://github.com/apache/iceberg-rust)
+
+The official implementation offers comprehensive features, including:
+
+- Table operations: create, read, update, delete
+- Schema evolution and hidden partitioning
+- Time travel and snapshot isolation
+- View and materialized view support
+- Multiple catalog implementations: REST, AWS Glue, File-based
+- Integration with Apache Arrow and DataFusion
+
+For more details, visit the [official documentation](https://docs.rs/iceberg/latest/iceberg/).
 
 ---
 
@@ -71,17 +91,20 @@ fn main() {
 ## Features
 
 Currently supported:
-* Parsing table metadata v2.
+
+- Parsing table metadata v2.
 
 Coming soon:
-* Manifest files. 
-* Manifest lists.
-* v1 table metadata support.
-* Validation.
+
+- Manifest files.
+- Manifest lists.
+- v1 table metadata support.
+- Validation.
 
 ## Iceberg Model
 
 Diagram showing the main `nouns` of the Iceberg model.
+
 ```mermaid
 erDiagram
     TABLE ||--o{ PARTITION_SPEC : partitions
@@ -112,3 +135,4 @@ Licensed under either of <a href="LICENSE-APACHE">Apache License, Version
 <sub>
 Unless you explicitly state otherwise, any contribution intentionally submitted to include in Iceberg-rs by you, as defined in the Apache-2.0 license, shall be dual licensed as above, with no additional terms or conditions.
 </sub>
+
