@@ -4,12 +4,18 @@ version = "0.1.1-beta.0"
 authors = ["Oliver Daff <oliverdaff@gmail.com>"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "An implementation of Apache Iceberg in Rust"
+description = "DEPRECATED: This crate is no longer maintained. Please use the `iceberg` crate instead."
 homepage = "https://github.com/oliverdaff/iceberg-rs"
 repository = "https://github.com/oliverdaff/iceberg-rs"
 keywords = ["iceberg", "analytics", "data"]
 categories = ["database", "filesystem"]
-include = ["src/**/*.rs", "crates-io.md", "README.md", "LICENSE-APACHE", "LICENSE-MIT"]
+include = [
+  "src/**/*.rs",
+  "crates-io.md",
+  "README.md",
+  "LICENSE-APACHE",
+  "LICENSE-MIT",
+]
 readme = "crates-io.md"
 
 [dependencies]

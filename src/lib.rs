@@ -1,20 +1,31 @@
-#![deny(missing_docs)]
-/*!
-# Iceberg-rs
+//! # Iceberg-rs
+//!
+//! > ⚠️ **DEPRECATED**: This crate is no longer maintained.
+//! > Please use the official [Apache Iceberg Rust implementation](https://crates.io/crates/iceberg) instead.
+//!
+//! ---
+//!
+//! `iceberg-rs` was an early Rust library for working with [Apache Iceberg](https://iceberg.apache.org/).
+//! It provided data structures for serializing and deserializing Iceberg table metadata.
+//!
+//! **This crate is now deprecated.** We recommend migrating to the official implementation:
+//!
+//! - 📦 Crate: [`iceberg`](https://crates.io/crates/iceberg)
+//! - 🔗 Repository: [apache/iceberg-rust](https://github.com/apache/iceberg-rust)
+//!
+//! The official crate offers comprehensive features, including:
+//!
+//! - Table operations: create, read, update, delete
+//! - Schema evolution and hidden partitioning
+//! - Time travel and snapshot isolation
+//! - View and materialized view support
+//! - Multiple catalog implementations: REST, AWS Glue, File-based
+//! - Integration with Apache Arrow and DataFusion
+//!
+//! For more details, visit the [official documentation](https://docs.rs/iceberg/latest/iceberg/).
+//!
+//! ---
+//!
+//! Thank you to everyone who used and contributed to `iceberg-rs`.
 
-Iceberg-rs is a library for working with [Apache Iceberg](https://iceberg.apache.org/).
-
-The Iceberg-rs [model] package consists of data structures that know how to
-serialise and deserialise the Iceberg table format.
-
-Currently supported:
-* Parsing table metadata v2.
-
-Coming soon:
-* Manifest files.
-* Manifest lists.
-* v1 table metadata support.
-* Validation.
-
-*/
 pub mod model;
